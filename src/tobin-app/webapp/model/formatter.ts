@@ -13,7 +13,7 @@ import { IconColor } from "sap/ui/core/library";
 export type Advice = "impossible" | "late" | "today" | "soon" | "ok" | "unknown";
 
 /** Day levels of the outlook (see DayLevel in srv/lib/bakery-week.ts). */
-export type DayLevel = "ok" | "belowComfort" | "empty";
+export type DayLevel = "ok" | "belowComfort" | "panic" | "empty";
 
 const ADVICE_STATE: Record<Advice, ValueState> = {
   impossible: ValueState.Error,
@@ -36,12 +36,14 @@ const ADVICE_ICON: Record<Advice, string> = {
 const LEVEL_STATE: Record<DayLevel, ValueState> = {
   ok: ValueState.Success,
   belowComfort: ValueState.Warning,
+  panic: ValueState.Error,
   empty: ValueState.Error,
 };
 
 const LEVEL_ICON: Record<DayLevel, string> = {
   ok: "sap-icon://sys-enter-2",
   belowComfort: "sap-icon://alert",
+  panic: "sap-icon://high-priority",
   empty: "sap-icon://sys-cancel",
 };
 
@@ -75,6 +77,18 @@ export default {
 
   levelIcon(level: unknown): string {
     return isDayLevel(level) ? LEVEL_ICON[level] : "";
+  },
+
+  /**
+   * The big number of a countdown tile: whole days left above the comfort level, two digits like
+   * the countdown of hackthefuture.be ("03"). Texts for "now" and "unknown" come from i18n.
+   */
+  countdown(daysAboveComfort: unknown, quantityTrusted: unknown, nowText: string, unknownText: string): string {
+    if (quantityTrusted === false) return unknownText;
+    const days = typeof daysAboveComfort === "number" || typeof daysAboveComfort === "string" ? Number(daysAboveComfort) : NaN;
+    if (daysAboveComfort === null || daysAboveComfort === "" || !Number.isFinite(days)) return unknownText;
+    if (days < 1) return nowText;
+    return String(Math.floor(days)).padStart(2, "0");
   },
 
   /** Icon colour that matches a ValueState (for the lines of the morning message). */

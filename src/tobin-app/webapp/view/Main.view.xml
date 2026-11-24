@@ -51,6 +51,45 @@
                     </VBox>
                 </VBox>
 
+                <!-- ===================== Countdown: days left above the comfort level =====================
+                     In the style of the countdown on hackthefuture.be: big two-digit numbers, a label below. -->
+                <VBox id="countdown" class="tobinTile tobinCountdownBox">
+                    <Title id="countdownTitle" text="{i18n>countdownTitle}" level="H4" class="tobinSection" />
+                    <FlexBox
+                        id="countdownTiles"
+                        justifyContent="SpaceAround"
+                        wrap="Wrap"
+                        class="tobinCountdownRow"
+                        items="{ path: 'food>/BakeryWeek', templateShareable: false }">
+                        <VBox id="countdownTile" alignItems="Center" class="tobinCountdownTile">
+                            <Text
+                                id="countdownNumber"
+                                class="tobinCountdownNumber"
+                                text="{ parts: [ { path: 'food>daysAboveComfort', targetType: 'any' }, { path: 'food>quantityTrusted' }, { path: 'i18n>countdownNow' }, { path: 'i18n>countdownUnknown' } ], formatter: 'formatter.countdown' }" />
+                            <Text
+                                id="countdownName"
+                                class="tobinCountdownLabel"
+                                text="{= %{food>itemID} === 'MILK' ? ${i18n>ingredientMILK} : %{food>itemID} === 'FLOUR' ? ${i18n>ingredientFLOUR} : %{food>itemID} === 'BUTTER' ? ${i18n>ingredientBUTTER} : %{food>name} }" />
+                            <ObjectStatus
+                                id="countdownStatus"
+                                text="{= %{food>advice} === 'impossible' ? ${i18n>adviceImpossible} : %{food>advice} === 'late' ? ${i18n>adviceLate} : %{food>advice} === 'today' ? ${i18n>adviceToday} : %{food>advice} === 'soon' ? ${i18n>adviceSoon} : %{food>advice} === 'ok' ? ${i18n>adviceOk} : ${i18n>adviceUnknown} }"
+                                icon="{ path: 'food>advice', formatter: 'formatter.adviceIcon' }"
+                                state="{ path: 'food>advice', formatter: 'formatter.adviceState' }" />
+                        </VBox>
+                    </FlexBox>
+                </VBox>
+
+                <!-- ===================== Today's order list, one line per supplier ===================== -->
+                <VBox id="orders" class="tobinTile" visible="{= ${view>/orders}.length > 0 }">
+                    <Title id="ordersTitle" text="{i18n>ordersTitle}" level="H4" class="tobinSection" />
+                    <VBox id="orderLines" items="{ path: 'view>/orders', templateShareable: false }">
+                        <HBox id="orderLine" justifyContent="SpaceBetween" alignItems="Baseline" wrap="Wrap" class="tobinFact tobinOrderLine">
+                            <Label id="orderSupplier" text="{view>supplier}" class="tobinOrderLabel" />
+                            <Text id="orderItems" text="{view>items}" class="tobinAnswer" />
+                        </HBox>
+                    </VBox>
+                </VBox>
+
                 <!-- ===================== One card per bread ingredient, most urgent first ===================== -->
                 <List
                     id="ingredientList"
@@ -84,6 +123,31 @@
                                 visible="{= %{food>quantityTrusted} === false &amp;&amp; %{food>orderBelowQuantity} !== null }"
                                 text="{ parts: [ { path: 'i18n>countAgainOrderBelow' }, { path: 'food>orderBelowQuantity', type: 'Decimal', formatOptions: { minFractionDigits: 0, maxFractionDigits: 2 }, constraints: { precision: 9, scale: 2 } }, { path: 'food>unit', targetType: 'any' }, { path: 'i18n>unitKG' }, { path: 'i18n>unitL' } ], formatter: 'formatter.quantityText' }" />
                             <Text id="impossibleExplain" text="{i18n>impossibleExplain}" visible="{= %{food>quantityTrusted} === false }" class="tobinFactText" />
+
+                            <!-- How much: comfort level + a week of use when the delivery arrives (Tobin's rule) -->
+                            <HBox
+                                id="factQuantityRow"
+                                justifyContent="SpaceBetween"
+                                alignItems="Baseline"
+                                wrap="Wrap"
+                                class="tobinFact tobinOrderRow tobinQuantityRow"
+                                visible="{= %{food>orderQuantity} !== null &amp;&amp; (%{food>advice} === 'late' || %{food>advice} === 'today' || %{food>advice} === 'soon') }">
+                                <Label id="factQuantityLabel" text="{i18n>factOrderQuantity}" class="tobinOrderLabel" />
+                                <ObjectNumber
+                                    id="factQuantityValue"
+                                    class="tobinBigNumber"
+                                    number="{ path: 'food>orderQuantity', type: 'Decimal', formatOptions: { minFractionDigits: 0, maxFractionDigits: 1 }, constraints: { precision: 9, scale: 2 } }"
+                                    unit="{= %{food>unit} === 'KG' ? ${i18n>unitKG} : %{food>unit} === 'L' ? ${i18n>unitL} : %{food>unit} }"
+                                    emphasized="true" />
+                            </HBox>
+
+                            <!-- Panic before the delivery: a case for an emergency delivery via the council -->
+                            <ObjectStatus
+                                id="factEmergency"
+                                state="Error"
+                                icon="sap-icon://high-priority"
+                                text="{i18n>factEmergency}"
+                                visible="{= %{food>panicBeforeDelivery} === true &amp;&amp; %{food>quantityTrusted} !== false }" />
 
                             <!-- The order date, when it is not "today" (the status above already says that) -->
                             <HBox
@@ -163,6 +227,13 @@
                                         text="{ path: 'food>date', type: 'ODataDate', formatOptions: { pattern: 'EEE d MMM' } }">
                                         <layoutData><FlexItemData id="outlookDayDateLayout" baseSize="5rem" shrinkFactor="0" /></layoutData>
                                     </Text>
+                                    <!-- Saturday is market day: this ingredient goes twice as fast (Tobin) -->
+                                    <ObjectStatus
+                                        id="outlookDayMarket"
+                                        text="{i18n>outlookMarketDay}"
+                                        icon="sap-icon://ti/building-store"
+                                        state="Information"
+                                        visible="{= %{food>marketDay} === true }" />
                                     <ObjectNumber
                                         id="outlookDayQuantity"
                                         textAlign="End"
@@ -173,7 +244,7 @@
                                     </ObjectNumber>
                                     <ObjectStatus
                                         id="outlookDayLevel"
-                                        text="{= %{food>level} === 'ok' ? ${i18n>levelOk} : %{food>level} === 'belowComfort' ? ${i18n>levelBelowComfort} : ${i18n>levelEmpty} }"
+                                        text="{= %{food>level} === 'ok' ? ${i18n>levelOk} : %{food>level} === 'belowComfort' ? ${i18n>levelBelowComfort} : %{food>level} === 'panic' ? ${i18n>levelPanic} : ${i18n>levelEmpty} }"
                                         icon="{ path: 'food>level', formatter: 'formatter.levelIcon' }"
                                         state="{ path: 'food>level', formatter: 'formatter.levelState' }">
                                         <layoutData><FlexItemData id="outlookDayLevelLayout" baseSize="7.5rem" shrinkFactor="0" /></layoutData>
@@ -190,6 +261,9 @@
                     <Text id="howWeCount1" text="{i18n>howWeCount1}" class="tobinMeta" />
                     <Text id="howWeCount2" text="{i18n>howWeCount2}" class="tobinMeta" />
                     <Text id="howWeCount3" text="{i18n>howWeCount3}" class="tobinMeta" />
+                    <Text id="howWeCount4" text="{i18n>howWeCount4}" class="tobinMeta" />
+                    <Text id="howWeCount5" text="{i18n>howWeCount5}" class="tobinMeta" />
+                    <Text id="howWeCount6" text="{i18n>howWeCount6}" class="tobinMeta" />
                 </VBox>
             </VBox>
         </f:content>
