@@ -9,10 +9,30 @@
  */
 import { ADVICE_RANK, planIngredient, type Advice, type IngredientPlan } from './lib/bakery-week';
 
+/** The request of the bound action recordDelivery: parameters in `data`, the item in `subject`. */
+interface ActionRequest {
+  readonly data: { quantity?: unknown; supplier?: unknown; receivedAt?: unknown };
+  readonly subject: unknown;
+  error(code: number, message: string, target?: string): void;
+}
+
+/** What recordDelivery returns (type DeliveryResult in food-stock-service.cds). */
+interface DeliveryResult {
+  stockUpdated: boolean;
+  newQuantity: number | null;
+}
+
+/** The stock row recordDelivery reads. */
+interface StockRow {
+  ID: string;
+  currentQuantity: number | string | null;
+}
+
 /** The slice of a CAP service this file uses. */
 interface CdsService {
   init(): Promise<void>;
   after(event: string, entity: string, handler: (results: unknown) => unknown): void;
+  on(event: string, entity: string, handler: (req: ActionRequest) => unknown): void;
 }
 
 /** A CQL SELECT with its columns set, narrowed down with `where`. */
@@ -28,13 +48,20 @@ interface CdsApi {
       from(entity: string): {
         columns<T>(...columns: readonly string[]): SelectQuery<T>;
       };
+      readonly one: {
+        from(entity: unknown): { columns<T>(...columns: readonly string[]): PromiseLike<T | undefined> };
+      };
     };
+    readonly INSERT: {
+      into(entity: string): { entries(data: Readonly<Record<string, unknown>>): PromiseLike<unknown> };
+    };
+    UPDATE(entity: string, key: string): { with(data: Readonly<Record<string, unknown>>): PromiseLike<unknown> };
   };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const cds = require('@sap/cds') as CdsApi;
-const { SELECT } = cds.ql;
+const { SELECT, INSERT, UPDATE } = cds.ql;
 
 /** The inputs of the bakery rules, as the database returns them (Decimals arrive as strings). */
 interface IngredientDbRow {
@@ -146,10 +173,74 @@ async function planBakeryWeek(results: unknown): Promise<void> {
   }
 }
 
+/**
+ * Who notes deliveries. The app src/tobin-delivery is Tobin's alone, and there is no login in
+ * this hackathon app — so we write his name, not "anonymous": Ilse wants to see a real person
+ * behind every change ("system is geen mens van vlees en bloed").
+ */
+const DELIVERY_AUTHOR = 'tobin.reyes';
+
+/** A few minutes of clock difference between the laptop and the server is not "the future". */
+const CLOCK_TOLERANCE_MS = 5 * 60 * 1000;
+
+/**
+ * Tobin notes a delivery: "welk product, hoeveel, van wie en wanneer".
+ * 1. Checks the input (a delivery in the future cannot be true — one of Ilse's signs).
+ * 2. Adds a StockReceivals row.
+ * 3. Raises the stock — unless the stock is negative: "die boter met min drie is een ander
+ *    verhaal … vraag het Ilse". Adding to an impossible number would hide it, so we leave it.
+ */
+async function recordDelivery(req: ActionRequest): Promise<DeliveryResult | undefined> {
+  const quantity = Number(req.data.quantity);
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    req.error(400, 'Vul in hoeveel er geleverd is: een getal groter dan 0.', 'quantity');
+    return undefined;
+  }
+  const supplier = typeof req.data.supplier === 'string' ? req.data.supplier.trim() : '';
+  if (!supplier) {
+    req.error(400, 'Vul in van wie de levering komt.', 'supplier');
+    return undefined;
+  }
+  const receivedAt = typeof req.data.receivedAt === 'string' ? new Date(req.data.receivedAt) : new Date(NaN);
+  if (Number.isNaN(receivedAt.getTime())) {
+    req.error(400, 'Vul in wanneer de levering binnenkwam.', 'receivedAt');
+    return undefined;
+  }
+  if (receivedAt.getTime() > Date.now() + CLOCK_TOLERANCE_MS) {
+    req.error(400, 'Een levering kan niet in de toekomst binnenkomen. Kijk de datum en het uur na.', 'receivedAt');
+    return undefined;
+  }
+
+  const item = await SELECT.one.from(req.subject).columns<StockRow>('ID', 'currentQuantity');
+  if (!item) {
+    req.error(404, 'Dit product bestaat niet (meer).');
+    return undefined;
+  }
+
+  await INSERT.into('oakhaven.curse.StockReceivals').entries({
+    item_ID: item.ID,
+    quantityReceived: quantity,
+    supplier,
+    receivedAt: receivedAt.toISOString(),
+    createdBy: DELIVERY_AUTHOR,
+    modifiedBy: DELIVERY_AUTHOR,
+  });
+
+  const current = Number(item.currentQuantity);
+  if (!Number.isFinite(current) || current < 0) {
+    return { stockUpdated: false, newQuantity: Number.isFinite(current) ? current : null };
+  }
+  const newQuantity = Math.round((current + quantity) * 100) / 100;
+  await UPDATE('oakhaven.curse.StockItems', item.ID).with({ currentQuantity: newQuantity, modifiedBy: DELIVERY_AUTHOR });
+  return { stockUpdated: true, newQuantity };
+}
+
 export default class FoodStockService extends cds.ApplicationService {
   override async init(): Promise<void> {
     // Tobin's bakery week: when to order flour, milk and butter (rules in srv/lib/bakery-week.ts).
     this.after('READ', 'BakeryWeek', planBakeryWeek);
+    // Tobin notes deliveries himself (app src/tobin-delivery).
+    this.on('recordDelivery', 'StockItems', recordDelivery);
     return super.init();
   }
 }

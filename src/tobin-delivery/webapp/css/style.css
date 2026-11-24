@@ -1,0 +1,149 @@
+/* Levering noteren — Tobin notes deliveries. Same hackathon look as his bakery week (src/tobin-app):
+   hackthefuture.be — night-blue grid, mint accent, Bebas Neue headings with a "_" cursor, thin mint
+   outlines. The brand block is copied from src/tobin-app/webapp/css/style.css (each app ships its
+   own CSS); keep the two in step. Status colours stay SAP semantic. */
+
+/* Bebas Neue, the headline font of hackthefuture.be. Needs internet; without it the headings fall
+   back to Horizon's own 72 Black (see --htf-display below), so nothing breaks offline. */
+@import url("https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap");
+
+/* ---------- hackthefuture.be brand (colours read from the live site) ----------
+   Set on the app's own root (the DynamicPage), so the launchpad and the other apps keep Horizon. */
+.tobinApp {
+	--htf-night: #0b161d;      /* page background */
+	--htf-panel: #1f202e;      /* panels / dialogs */
+	--htf-mint: #79d7c0;       /* accent: links, buttons, outlines */
+	--htf-white: #f5f5f5;
+	--htf-grey: #d6d6d6;
+	--htf-display: "Bebas Neue", "72Black", "72", Arial, sans-serif;
+
+	/* Derived from the tokens above (no new colours). */
+	--htf-line: color-mix(in srgb, var(--htf-mint) 35%, transparent);
+	--htf-grid: color-mix(in srgb, var(--htf-mint) 7%, transparent);
+	--htf-surface: color-mix(in srgb, var(--htf-panel) 70%, var(--htf-night));
+	--htf-muted: color-mix(in srgb, var(--htf-grey) 75%, var(--htf-night));
+
+	/* The page: night blue with the faint square grid of the site. The DynamicPage has
+	   backgroundDesign="Transparent" in the view, so this shows through. */
+	background-color: var(--htf-night);
+	background-image:
+		linear-gradient(var(--htf-grid) 1px, transparent 1px),
+		linear-gradient(90deg, var(--htf-grid) 1px, transparent 1px);
+	background-size: 2rem 2rem;
+
+	/* SAP theme parameters follow the brand inside this app, so the controls do too. */
+	--sapBrandColor: var(--htf-mint);
+	--sapFontHeaderFamily: var(--htf-display);
+	--sapObjectHeader_Title_FontFamily: var(--htf-display); /* the DynamicPage title */
+	--sapObjectHeader_Title_FontSize: 2.25rem;
+	--sapBackgroundColor: var(--htf-night);
+	--sapObjectHeader_Background: transparent;
+	--sapTextColor: var(--htf-white);
+	--sapGroup_TitleTextColor: var(--htf-white);
+	--sapContent_IconColor: var(--htf-white);
+	--sapContent_LabelColor: var(--htf-muted);
+	--sapTile_Background: var(--htf-surface);
+	--sapTile_BorderColor: var(--htf-line);
+}
+
+/* Headings in the site's voice: Bebas Neue, uppercase, a bit of air between the letters. */
+.tobinApp .tobinHeading,
+.tobinApp .tobinSection,
+.tobinApp .tobinName,
+.tobinApp .tobinHeadline,
+.tobinApp .tobinMessageMeta,
+.tobinApp .tobinOrderLabel {
+	font-family: var(--htf-display);
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	font-weight: normal;
+}
+
+/* The blinking-cursor underscore of "HACKATHON_". */
+.tobinApp .tobinHeading::after,
+.tobinApp .tobinHeadline::after {
+	content: "_";
+	color: var(--htf-mint);
+}
+
+.tobinApp .tobinHeading {
+	font-size: 2rem;
+	line-height: 1;
+}
+
+.tobinApp .tobinSection {
+	color: var(--htf-mint);
+	font-size: 1.25rem;
+}
+
+.tobinLogo {
+	color: var(--htf-mint);
+}
+
+.tobinPage {
+	max-width: 40rem;
+	margin: 0 auto;
+}
+
+/* Thin mint outline, square corners — the boxes of the site. No shadows. */
+.tobinTile {
+	box-sizing: border-box;
+	padding: 1rem;
+	margin-bottom: 0.75rem;
+	background: var(--sapTile_Background);
+	border: 1px solid var(--sapTile_BorderColor);
+	border-radius: 0;
+}
+
+
+.tobinMeta {
+	font-size: var(--sapFontSize);
+	color: var(--sapContent_LabelColor);
+}
+
+.tobinApp .tobinName {
+	font-size: 1.5rem;
+	line-height: 1;
+}
+
+.tobinFactText {
+	font-size: var(--sapFontLargeSize);
+	color: var(--sapTextColor);
+}
+
+.tobinBigNumber {
+	font-size: 1.75rem;
+}
+
+/* ---------- The form: big labels, big inputs — floury hands, early morning ---------- */
+
+.tobinForm {
+	gap: 0.25rem;
+}
+
+.tobinApp .tobinFieldLabel {
+	margin-top: 1rem;
+	font-family: var(--htf-display);
+	font-size: 1.25rem;
+	letter-spacing: 0.03em;
+	text-transform: uppercase;
+	color: var(--htf-mint);
+}
+
+.tobinUnit {
+	font-size: 1.25rem;
+	color: var(--sapTextColor);
+}
+
+.tobinSave {
+	margin-top: 1.5rem;
+	width: 100%;
+}
+
+/* ---------- History ---------- */
+
+.tobinHistoryRow {
+	width: 100%;
+	padding: 0.5rem 0;
+	gap: 1rem;
+}
