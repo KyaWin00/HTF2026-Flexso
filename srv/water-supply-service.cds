@@ -39,6 +39,10 @@ service WaterSupplyService @(path: 'water-supply', impl: 'srv/water-supply-servi
   /** A villager reports a problem with the water at their place. */
   action reportProblem(area_ID : UUID, problem : String, note : String) returns WaterReports;
 
+  /** The crew: this pipe is repaired. It leaves today's list, gets a line in the repair history,
+   *  and the open reports of the places it feeds are closed. */
+  action markRepaired(pipe_ID : UUID) returns Boolean;
+
   /**
    * Maren's morning round (app src/maren-app): every pipe with its level and its place in her
    * visiting order, sorted — first visit first. The rules are in srv/lib/morning-round.ts; all
@@ -63,7 +67,9 @@ service WaterSupplyService @(path: 'water-supply', impl: 'srv/water-supply-servi
     virtual null as measuredLevel     : String,  // level from the measurements alone
     virtual null as reportedProblem   : String,  // most serious open report (noWater, littleWater, leak, other)
     virtual null as raisedByReport    : Boolean, // the level comes from a villager's report
-    virtual null as doubtSigns        : String   // Ilse's signs (srv/lib/data-doubt.ts), comma-separated
+    virtual null as doubtSigns        : String,  // Ilse's signs (srv/lib/data-doubt.ts), comma-separated
+    virtual null as repairedToday     : Boolean, // the crew marked it as repaired today
+    virtual null as daySlot           : Integer  // 1 = morning, 2 = afternoon (today's visits only)
   };
 
   /** Only today's visits (at most two: "meer dan twee per dag lukt ons niet"), first one first. */

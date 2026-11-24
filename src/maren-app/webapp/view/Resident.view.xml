@@ -4,6 +4,8 @@
     xmlns:mvc="sap.ui.core.mvc"
     xmlns:f="sap.f"
     xmlns:app="http://schemas.sap.com/sapui5/extension/sap.ui.core.CustomData/1"
+    xmlns:core="sap.ui.core"
+    core:require="{ formatMessage: 'sap/base/strings/formatMessage' }"
     displayBlock="true"
     height="100%">
     <!-- Resident part: a villager tells Maren that something is wrong with the water at their place.
@@ -22,23 +24,17 @@
             <VBox id="reportForm" class="residentForm" busy="{view>/busy}" busyIndicatorDelay="0">
                 <Text id="reportIntro" text="{i18n>reportIntro}" class="residentIntro" />
 
-                <!-- 1. Where: only places that get their water through a pipe. -->
+                <!-- 1. Where: the resident taps their place on the pipe plan (same plan as the crew sees, but
+                     plain: no planning, no levels). Only places that get their water through a pipe can be tapped. -->
                 <Title id="placeLabel" text="{i18n>reportPlaceLabel}" level="H2" titleStyle="H4" wrapping="true" class="residentQuestion" />
-                <List
-                    id="placeList"
-                    mode="SingleSelectLeft"
-                    includeItemInSelection="true"
-                    backgroundDesign="Transparent"
-                    ariaLabelledBy="placeLabel"
-                    noDataText="{i18n>reportNoPlaces}"
-                    selectionChange=".onPlaceSelect"
-                    items="{
-                        path: '/Landmarks',
-                        filters: [{ path: 'suppliedBy', operator: 'NE', value1: null }],
-                        sorter: { path: 'name' }
-                    }">
-                    <StandardListItem id="placeItem" title="{name}" wrapping="true" />
-                </List>
+                <core:HTML id="residentPlan" content="{view>/planSvg}" />
+                <ObjectStatus
+                    id="placeChosen"
+                    visible="{= !!${view>/placeName} }"
+                    icon="sap-icon://map"
+                    state="Information"
+                    text="{ parts: ['i18n>reportPlaceChosen', 'view>/placeName'], formatter: 'formatMessage' }"
+                    class="residentChosen" />
 
                 <!-- 2. What: the four problem codes of reportProblem. -->
                 <Title id="problemLabel" text="{i18n>reportProblemLabel}" level="H2" titleStyle="H4" wrapping="true" class="residentQuestion" />

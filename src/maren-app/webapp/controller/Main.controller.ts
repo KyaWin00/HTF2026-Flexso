@@ -16,9 +16,11 @@ import type ManagedObject from "sap/ui/base/ManagedObject";
 import type UI5Event from "sap/ui/base/Event";
 import type VBox from "sap/m/VBox";
 import type { Button$PressEvent } from "sap/m/Button";
+import type Button from "sap/m/Button";
 import type ODataModel from "sap/ui/model/odata/v4/ODataModel";
 import MessageToast from "sap/m/MessageToast";
 import MessageBox from "sap/m/MessageBox";
+import buildPipePlan from "../model/PipePlan";
 
 /** One of today's stops as the read-aloud text needs it. */
 interface StopData {
@@ -179,7 +181,18 @@ export default class Main extends Controller {
     );
     Device.media.attachHandler(this.onRangeChange, this, Device.media.RANGESETS.SAP_STANDARD);
     // Wet gloves: one tap anywhere on today's stops reads them aloud (tap again to stop).
-    this.byId("todayList")?.addEventDelegate({ onclick: () => this.readAloud() }, this);
+    // (Not when the tap is on a button inside a stop, such as "Hersteld".)
+    this.byId("todayList")?.addEventDelegate(
+      {
+        onclick: (event: { target: unknown }) => {
+          if (!(event.target as ElementLike | null)?.closest(".sapMBtn")) this.readAloud();
+        },
+      },
+      this,
+    );
+    // A click on a pipe of the plan or the map shows its dry shadow. Both are plain SVG inside
+    // core:HTML, so UI5 routes their events to the nearest real control above; the view catches them.
+    this.getView()?.addEventDelegate({ onclick: this.onMapClick }, this);
 
     this.refreshTimer = setInterval(() => this.refresh(), REFRESH_MS);
     browser.document.addEventListener("visibilitychange", this.onVisibilityChange);
@@ -232,6 +245,47 @@ export default class Main extends Controller {
     );
   }
 
+  /** "Hersteld": asks once, then marks the pipe as repaired; it leaves today's list. */
+  public onMarkRepaired(event: Button$PressEvent): void {
+    const button = event.getSource();
+    const context = button.getBindingContext() as Context | undefined;
+    const pipeId = context?.getProperty("ID") as string | undefined;
+    const place = String(context?.getProperty("endPoint") ?? "");
+    if (!pipeId) return;
+    const yes = this.text("repairYes");
+    MessageBox.confirm(this.text("repairConfirm", [place]), {
+      title: this.text("repairTitle"),
+      actions: [yes, this.text("repairNo")],
+      emphasizedAction: yes,
+      onClose: (action: unknown) => {
+        if (action === yes) void this.markRepaired(pipeId, place, button);
+      },
+    });
+  }
+
+  /** A repair dated after now cannot be true (one of Ilse's signs). */
+  public isFuture(date: string | null): boolean {
+    return !!date && new Date(date).getTime() > Date.now();
+  }
+
+  private async markRepaired(pipeId: string, place: string, button: Button): Promise<void> {
+    const model = this.getOwnerComponent()?.getModel() as ODataModel | undefined;
+    if (!model) return;
+    button.setBusy(true);
+    const action = model.bindContext("/markRepaired(...)");
+    action.setParameter("pipe_ID", pipeId);
+    try {
+      await action.invoke();
+      MessageToast.show(this.text("repairDone", [place]));
+      this.refresh(true);
+    } catch (error) {
+      MessageBox.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      button.setBusy(false);
+      action.destroy();
+    }
+  }
+
   /** Ilse's doubt signs (codes from the server) as readable text. */
   public formatDoubt(signs: string | null, _textsReady: boolean): string {
     return (signs ?? "")
@@ -268,11 +322,6 @@ export default class Main extends Controller {
   }
 
   /** The map's DOM is new after every redraw: listen for clicks on its pipes. */
-  /** The plan's DOM is new after every redraw: a click on a line shows its dry shadow too. */
-  public onPlanRendered(): void {
-    (this.byId("plan")?.getDomRef() as EventTargetLike | null | undefined)?.addEventListener("click", this.onMapClick);
-  }
-
   /** Reads the whole round (all pipes) for the plan and the map — also on the phone. */
   private async loadRound(): Promise<void> {
     const model = this.getOwnerComponent()?.getModel() as ODataModel | undefined;
@@ -287,10 +336,6 @@ export default class Main extends Controller {
     } catch (error) {
       Log.warning("Could not read the morning round", String(error), "oakhaven.maren");
     }
-  }
-
-  public onMapRendered(): void {
-    (this.byId("map")?.getDomRef() as EventTargetLike | null | undefined)?.addEventListener("click", this.onMapClick);
   }
 
   private viewModel(): JSONModel {
@@ -367,7 +412,7 @@ export default class Main extends Controller {
   /** Reloads the lists (Maren never needs to press anything); the details only on a wide screen. */
   private refresh(all = false): void {
     const wide = all || this.viewModel().getProperty("/wide") === true;
-    const lists = ["todayList", "laterList", "reportList"];
+    const lists = ["todayList", "laterList", "reportList", "historyList"];
     for (const id of wide ? [...lists, "roundTable"] : lists) {
       (this.byId(id) as ManagedObject | undefined)?.getBinding("items")?.refresh();
     }
@@ -461,105 +506,19 @@ export default class Main extends Controller {
     return this.text("drySelected", [pipe.startPoint, pipe.endPoint, pipe.servedAreas]);
   }
 
-  /**
-   * The pipe plan, drawn like a transit map (Maren: "op dezelfde lijn", "stroomopwaarts"): the spring
-   * on top, each pipe a line from the place it starts to the place it ends, in its level (colour and
-   * dash pattern), today's stops as numbered dots, "zonder water" under places that are dry now.
-   * A pipe that runs back to the spring (the reserve loop) ends in a small "terug naar de bron" stop.
-   */
+  /** The pipe plan (model/PipePlan.ts), crew version: levels, today's numbered dots, dry shadow. */
   private drawPlan(): void {
-    const COL = 96;
-    const ROW = 100;
-    const TOP = 34;
-    const SIDE = 50;
-    // The root: where the pipe with the most pipes behind it starts (the spring).
-    const main = [...this.pipes].sort(
-      (a, b) => (b.downstreamPipes ?? "").split(",").length - (a.downstreamPipes ?? "").split(",").length,
-    )[0];
-    if (!main) return;
-
-    interface PlanNode { label: string; key: string; depth: number; x: number; y: number; back: boolean; children: { pipe: RoundPipe; node: PlanNode }[] }
-    const seen = new Set<string>([main.startPoint]);
-    const leaves: PlanNode[] = [];
-    const build = (name: string, depth: number, back: boolean, key: string): PlanNode => {
-      const node: PlanNode = { label: back ? this.text("planBack") : name, key, depth, x: 0, y: TOP + depth * ROW, back, children: [] };
-      if (!back) {
-        for (const pipe of this.pipes.filter((p) => p.startPoint === name)) {
-          const loop = seen.has(pipe.endPoint);
-          seen.add(pipe.endPoint);
-          node.children.push({ pipe, node: build(pipe.endPoint, depth + 1, loop, `${pipe.pipeID}-end`) });
-        }
-      }
-      if (node.children.length === 0) leaves.push(node);
-      return node;
-    };
-    const root = build(main.startPoint, 0, false, "root");
-    leaves.forEach((leaf, index) => (leaf.x = SIDE + index * COL));
-    const place = (node: PlanNode): number => {
-      if (node.children.length > 0) {
-        const xs = node.children.map((child) => place(child.node));
-        node.x = (Math.min(...xs) + Math.max(...xs)) / 2;
-      }
-      return node.x;
-    };
-    place(root);
-
     const selected = this.pipes.find((p) => p.pipeID === this.selectedPipe);
     const sources = selected ? [selected] : this.pipes.filter((p) => p.level === "alarm" && !p.nobodyDependsOnIt);
     const dry = new Set(sources.flatMap((p) => (p.downstreamPipes ?? "").split(",")).filter(Boolean));
-
-    const shadows: string[] = [];
-    const lines: string[] = [];
-    const stations: string[] = [];
-    const badges: string[] = [];
-    const walk = (node: PlanNode): void => {
-      for (const { pipe, node: child } of node.children) {
-        const midY = node.y + ROW / 2;
-        const d = `M${node.x},${node.y} V${midY} H${child.x} V${child.y}`;
-        const level = escapeXml(pipe.level ?? "ok");
-        const id = escapeXml(pipe.pipeID);
-        const title = escapeXml(this.text("mapPipeTitle", [pipe.startPoint, pipe.endPoint, this.levelText(pipe.level)]));
-        if (dry.has(pipe.pipeID)) shadows.push(`<path class="planDry" d="${d}"/>`);
-        lines.push(`<path class="planLine planLine--${level}" data-pipe="${id}" d="${d}"><title>${title}</title></path>`);
-        if (pipe.visitOrder !== null) {
-          const by = midY + (child.y - midY) * 0.42;
-          badges.push(
-            `<g class="planBadge" data-pipe="${id}"><circle cx="${child.x}" cy="${by}" r="13"/>` +
-              `<text x="${child.x}" y="${by + 5}" text-anchor="middle">${pipe.visitOrder}</text></g>`,
-          );
-        }
-        walk(child);
-      }
-      stations.push(`<circle class="planStation" cx="${node.x}" cy="${node.y}" r="${node.back ? 5 : 8}"/>`);
-      // Name: right of a station that has lines below it, under an end station.
-      const words = node.label.split(" ");
-      const lines2 = words.length > 1 && node.label.length > 12 ? [words.slice(0, Math.ceil(words.length / 2)).join(" "), words.slice(Math.ceil(words.length / 2)).join(" ")] : [node.label];
-      const end = node.children.length === 0;
-      const tx = end ? node.x : node.x + 14;
-      const ty = end ? node.y + 24 : node.y + 4;
-      const anchor = end ? "middle" : "start";
-      const cls = node.back ? "planLabel planLabel--muted" : "planLabel";
-      stations.push(
-        `<text class="${cls}" x="${tx}" y="${ty}" text-anchor="${anchor}">` +
-          lines2.map((t, i) => `<tspan x="${tx}" dy="${i === 0 ? 0 : 15}">${escapeXml(t)}</tspan>`).join("") +
-          `</text>`,
-      );
-      const feeding = this.pipes.find((p) => p.endPoint === node.label && !node.back);
-      if (end && feeding && dry.has(feeding.pipeID) && !feeding.nobodyDependsOnIt) {
-        stations.push(`<text class="planDryText" x="${tx}" y="${ty + lines2.length * 15 + 2}" text-anchor="middle">${escapeXml(this.text("dryLabel"))}</text>`);
-      }
-    };
-    walk(root);
-
-    const depth = Math.max(...leaves.map((leaf) => leaf.depth));
-    const width = SIDE * 2 + (leaves.length - 1) * COL;
-    const height = TOP + depth * ROW + 70;
-    const alt = escapeXml(this.text("planAlt"));
     this.viewModel().setProperty(
       "/planSvg",
-      `<div class="marenPlan"><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${alt}">` +
-        shadows.join("") + lines.join("") + stations.join("") + badges.join("") +
-        `</svg></div>`,
+      buildPipePlan(this.pipes, {
+        showStatus: true,
+        dry,
+        text: (key, args) => this.text(key, args),
+        levelText: (level) => this.levelText(level),
+      }),
     );
   }
 }

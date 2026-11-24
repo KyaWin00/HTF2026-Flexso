@@ -58,7 +58,11 @@ interface CdsApi {
       readonly one: { from(entity: unknown): SelectOneQuery };
     };
     readonly INSERT: { into(entity: string): { entries(row: Readonly<Record<string, unknown>>): PromiseLike<unknown> } };
-    readonly UPDATE: (entity: unknown) => { with(changes: Readonly<Record<string, unknown>>): PromiseLike<number> };
+    readonly UPDATE: (entity: unknown, key?: unknown) => {
+      with(changes: Readonly<Record<string, unknown>>): PromiseLike<number> & {
+        where(predicate: Readonly<Record<string, unknown>>): PromiseLike<number>;
+      };
+    };
   };
   readonly utils: { uuid(): string };
 }
@@ -123,6 +127,7 @@ interface PipeDbRow {
   createdAt: string | null;
   modifiedBy: string | null;
   modifiedAt: string | null;
+  repairedAt: string | null;
 }
 
 /** Who changed a record and when — the `managed` fields Ilse's signs look at. */
@@ -173,6 +178,11 @@ function toNumber(value: number | string | null): number {
   return Number.isFinite(number) ? number : 0;
 }
 
+/** Same calendar day (UTC, as stored). */
+function isToday(at: string | null, now: Date): boolean {
+  return !!at && new Date(at).toISOString().slice(0, 10) === now.toISOString().slice(0, 10);
+}
+
 function toPipeFacts(row: PipeDbRow, reports: readonly string[]): PipeFacts {
   return {
     ID: row.ID,
@@ -183,6 +193,7 @@ function toPipeFacts(row: PipeDbRow, reports: readonly string[]): PipeFacts {
     currentFlowRate: toNumber(row.currentFlowRate),
     currentPressure: toNumber(row.currentPressure),
     reports,
+    repairedToday: isToday(row.repairedAt, new Date()),
   };
 }
 
@@ -237,6 +248,8 @@ function toRoundFields(plan: PipePlan, doubts: readonly DoubtSign[]): Record<str
     measuredLevel: plan.measuredLevel,
     reportedProblem: plan.reportedProblem,
     raisedByReport: plan.raisedByReport,
+    repairedToday: plan.repairedToday,
+    daySlot: plan.daySlot,
     doubtSigns: doubts.join(','),
     level: plan.level,
     flowPercent: plan.flowPercent,
@@ -282,7 +295,7 @@ async function planRound(results: unknown, keep: RoundSelection): Promise<void> 
   const [pipes, landmarks, sensors, repairs, reports] = await Promise.all([
     SELECT.from('oakhaven.curse.WaterPipes').columns<PipeDbRow>(
       'ID', 'pipeID', 'startPoint', 'endPoint', 'nominalFlowRate', 'currentFlowRate', 'currentPressure',
-      'createdBy', 'createdAt', 'modifiedBy', 'modifiedAt',
+      'createdBy', 'createdAt', 'modifiedBy', 'modifiedAt', 'repairedAt',
     ),
     SELECT.from('oakhaven.curse.Landmarks').columns<LandmarkDbRow>(
       'ID', 'name', 'kind', 'suppliedBy', 'waterPriority', 'households',
@@ -341,6 +354,33 @@ async function markHandled(req: ActionRequest): Promise<unknown> {
   return SELECT.one.from(req.subject);
 }
 
+/**
+ * The crew marks a pipe as repaired. Three things happen together:
+ * the pipe leaves today's list (repairedAt = now; it used one of the day's two repairs),
+ * a line goes into the repair history (Repairs), and the open reports of the places it feeds are closed.
+ */
+async function markRepaired(req: ActionRequest): Promise<unknown> {
+  const pipeId = typeof req.data.pipe_ID === 'string' ? req.data.pipe_ID : '';
+  const pipe = pipeId ? await SELECT.one.from('oakhaven.curse.WaterPipes').where({ ID: pipeId }) : undefined;
+  if (!pipe) return req.error(404, 'Deze leiding bestaat niet.', 'pipe_ID');
+
+  const now = new Date().toISOString();
+  await UPDATE('oakhaven.curse.WaterPipes', pipeId).with({ repairedAt: now });
+  await INSERT.into('oakhaven.curse.Repairs').entries({
+    ID: cds.utils.uuid(),
+    pipe_ID: pipeId,
+    repairID: cds.utils.uuid(),
+    issue: 'Hersteld tijdens de ochtendronde',
+    repairDate: now,
+    repairedBy: 'Ploeg van Maren',
+  });
+  const areas = await SELECT.from('oakhaven.curse.Landmarks').columns<{ ID: string }>('ID').where({ suppliedBy: pipe.pipeID });
+  if (areas.length > 0) {
+    await UPDATE('oakhaven.curse.WaterReports').with({ handled: true }).where({ area_ID: { in: areas.map((a) => a.ID) }, handled: false });
+  }
+  return true;
+}
+
 export default class WaterSupplyService extends cds.ApplicationService {
   override async init(): Promise<void> {
     // 👋 EXAMPLE — register the handler: after every READ of WaterPipes, add daysSinceMaintenance.
@@ -354,6 +394,8 @@ export default class WaterSupplyService extends cds.ApplicationService {
     // Reports from villagers.
     this.on('reportProblem', reportProblem);
     this.on('markHandled', 'WaterReports', markHandled);
+    // The crew: a pipe is repaired.
+    this.on('markRepaired', markRepaired);
 
     startDemoSensorFeed();
     return super.init();

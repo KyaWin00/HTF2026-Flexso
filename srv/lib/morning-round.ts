@@ -31,6 +31,8 @@ export interface PipeFacts {
   readonly currentPressure: number; // PSI
   /** Open (not handled) reports from villagers at a place this pipe feeds: problem codes. */
   readonly reports?: readonly string[];
+  /** The crew marked this pipe as repaired today. */
+  readonly repairedToday?: boolean;
 }
 
 /** The facts about one landmark that the rules need. */
@@ -69,6 +71,10 @@ export interface PipePlan {
   readonly reportedProblem: string | null;
   /** The level was raised by a villager's report, not by the measurements. */
   readonly raisedByReport: boolean;
+  /** Repaired by the crew today: no visit, shown as done. */
+  readonly repairedToday: boolean;
+  /** Which half of today this visit takes: 1 = morning, 2 = afternoon (repairs done today come first). */
+  readonly daySlot: number | null;
   /** The rule that put this visit before the next one; null when the pipe needs no visit. */
   readonly whyBeforeNext: WhyCode | null;
   /** pipeIDs that run dry when this pipe fails (itself and everything downstream). */
@@ -240,7 +246,10 @@ export function planMorningRound(
   });
 
   // Only pipes that are not "ok" need a visit ("Dan plan ik deze week een bezoek").
-  const visits = candidates.filter((c) => c.level !== 'ok').sort(compareCandidates);
+  // A pipe the crew repaired today needs no visit any more, and it used one of today's repairs.
+  const visits = candidates.filter((c) => c.level !== 'ok' && !c.pipe.repairedToday).sort(compareCandidates);
+  const repairedToday = candidates.filter((c) => c.pipe.repairedToday).length;
+  const capacityToday = Math.max(0, VISITS_PER_DAY - repairedToday);
   const visitOrder = new Map(visits.map((c, index) => [c.pipe.ID, index + 1]));
   const why = new Map(visits.map((c, index) => [c.pipe.ID, whyBefore(c, visits[index + 1])]));
 
@@ -259,13 +268,15 @@ export function planMorningRound(
       lowFlow: c.level !== 'ok' && percent < flowLimit,
       lowPressure: c.level !== 'ok' && c.pipe.currentPressure < pressureLimit,
       visitOrder: order,
-      today: order !== null && order <= VISITS_PER_DAY,
+      today: order !== null && order <= capacityToday,
       servedAreas: c.areas.map((a) => a.name),
       households: complete ? c.areas.reduce((sum, a) => sum + (a.households ?? 0), 0) : null,
       nobodyDependsOnIt: c.areas.length === 0,
       measuredLevel: levelOf(c.pipe),
       reportedProblem: worstReport(c.pipe),
       raisedByReport: c.level !== levelOf(c.pipe),
+      repairedToday: c.pipe.repairedToday === true,
+      daySlot: order !== null && order <= capacityToday ? repairedToday + order : null,
       whyBeforeNext: why.get(c.pipe.ID) ?? null,
       downstreamPipes: [...c.downstream],
     });

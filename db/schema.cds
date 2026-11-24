@@ -33,6 +33,8 @@ entity WaterPipes : cuid, managed {
   currentFlowRate : Decimal(9, 2); // L/min — what it carries right now
   currentPressure : Decimal(9, 2); // PSI   — water pressure right now
   lastMaintenance : DateTime;
+  /** When the crew marked the pipe as repaired in the morning round (app "Ochtendronde"). */
+  repairedAt      : Timestamp;
   /** Route on the village map in grid units: "x,y x,y …", x/y in [0,8] from the
    *  south-west corner of cell A1 (centre of E6 = "4.5,5.5"), in flow direction. */
   mapPath         : String;

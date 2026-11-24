@@ -166,6 +166,29 @@ body {
     transform-origin: left top;
 }
 
+/* "Hersteld": Horizon's own button, scaled up as a whole for gloves (same as "Voorlezen"). */
+.marenDoneBox {
+    display: block;
+    margin: 0.25rem 0 0.75rem;
+}
+
+.marenDoneBox > .sapMBtn {
+    transform: scale(1.3);
+    transform-origin: left top;
+}
+
+/* History tab */
+.marenHistoryRow {
+    display: flex;
+    gap: 1rem;
+    padding: 0.5rem 0;
+}
+
+.marenHistoryDate {
+    flex: 0 0 6rem;
+    color: var(--sapContent_LabelColor);
+}
+
 /* ---------- Tomorrow and later, reports ---------- */
 
 .marenLaterRow,
@@ -239,6 +262,41 @@ body {
 
 .planLine--ok {
     stroke: var(--sapPositiveColor);
+}
+
+/* Residents: plain lines, and big dots to tap on their place. */
+.planLine--plain {
+    stroke: var(--sapContent_LabelColor);
+    cursor: default;
+}
+
+.planPlace {
+    cursor: pointer;
+    outline: none;
+}
+
+.planPlaceHit {
+    fill: transparent;
+}
+
+.planPlaceDot {
+    fill: var(--sapBackgroundColor);
+    stroke: var(--sapButton_Emphasized_Background);
+    stroke-width: 4;
+}
+
+.planPlace:hover .planPlaceDot,
+.planPlace:focus-visible .planPlaceDot {
+    stroke-width: 7;
+}
+
+.planPlace--selected .planPlaceDot {
+    fill: var(--sapButton_Emphasized_Background);
+}
+
+.planLabel--selected {
+    font-family: var(--sapFontBoldFamily);
+    fill: var(--sapButton_Emphasized_Background);
 }
 
 .planDry {
