@@ -169,3 +169,76 @@
 .rowanDetails {
 	margin-bottom: 2rem;
 }
+
+/* ---------- The village map (model/villageMap.ts) ---------- */
+
+.rowanMap {
+	width: 100%;
+	max-width: 40rem;
+	margin: 0 auto;
+	border: 1px solid var(--htf-line);
+	overflow: hidden;
+}
+
+.rowanMapSvg {
+	display: block;
+	width: 100%;
+	height: auto;
+}
+
+/* Darken the painted map a little so the coloured lines and dots stand out. */
+.rowanMapShade {
+	fill: var(--htf-night);
+	fill-opacity: 0.35;
+}
+
+.rowanMapCasing {
+	stroke: var(--htf-night);
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.rowanMapPipe {
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.rowanMapPipe-alarm { stroke: var(--sapNegativeColor); }
+.rowanMapPipe-attention { stroke: var(--sapCriticalColor); }
+.rowanMapPipe-ok { stroke: var(--sapPositiveColor); stroke-opacity: 0.7; }
+
+.rowanMapDot { stroke: var(--htf-white); }
+.rowanMapDot-sev0 { fill: var(--sapNegativeColor); }
+.rowanMapDot-sev1 { fill: var(--sapCriticalColor); }
+.rowanMapDot-sev2 { fill: var(--sapPositiveColor); }
+
+/* Labels: Bebas for the name, a dark outline so they read on any part of the painting. */
+.rowanMapName,
+.rowanMapStatus {
+	fill: var(--htf-white);
+	stroke: var(--htf-night);
+	stroke-width: 14px;
+	paint-order: stroke;
+}
+
+.rowanMapName {
+	font-family: var(--htf-display);
+	font-size: 72px;
+	letter-spacing: 2px;
+}
+
+.rowanMapStatus {
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 48px;
+	font-weight: bold;
+}
+
+/* ---------- Proposal extras ---------- */
+
+.rowanBudgetBar {
+	max-width: 32rem;
+}
+
+.rowanWithout {
+	font-style: italic;
+}

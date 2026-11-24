@@ -1,4 +1,5 @@
 import formatMessage from "sap/base/strings/formatMessage";
+import DateFormat from "sap/ui/core/format/DateFormat";
 
 /**
  * Formatters for the council overview. Texts are passed in from i18n (see the `parts` in Main.view.xml),
@@ -122,6 +123,34 @@ function proposalState(status: string | null): string {
   return "None";
 }
 
+/**
+ * What happens if the council does nothing (only for proposed lines): water stays off, or the
+ * product runs out on a given day (Tobin's week ahead, market day included).
+ */
+function withoutText(
+  kind: string | null,
+  need: string | null,
+  areas: string | null,
+  title: string | null,
+  emptyDate: string | null,
+  noWater: string,
+  waterRisk: string,
+  foodDate: string,
+  food: string,
+): string {
+  if (kind === "water") {
+    if (need === "noWaterNow") return formatMessage(noWater, [areas ?? ""]);
+    if (need === "waterRisk") return formatMessage(waterRisk, [areas ?? ""]);
+    return "";
+  }
+  const name = (title ?? "").toLocaleLowerCase();
+  if (emptyDate) {
+    const date = DateFormat.getDateInstance({ pattern: "EEEE d MMMM" }).format(new Date(emptyDate + "T00:00:00"));
+    return formatMessage(foodDate, [name, date]);
+  }
+  return formatMessage(food, [name]);
+}
+
 function proposalIcon(status: string | null): string {
   if (status === "proposed") return "sap-icon://ti/circle-check";
   if (status === "overBudget") return "sap-icon://ti/coins";
@@ -140,6 +169,7 @@ export default {
   foodIcon,
   foodText,
   reasonText,
+  withoutText,
   proposalDoubt,
   proposalState,
   proposalIcon,

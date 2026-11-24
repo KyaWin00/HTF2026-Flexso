@@ -272,6 +272,7 @@ async function judgeFood(): Promise<FoodFacts[]> {
       panicBeforeDelivery: plan.panicBeforeDelivery === true,
       belowMinimum: num(item.currentQuantity) < num(item.minStockLevel),
       daysAboveComfort: plan.daysAboveComfort,
+      emptyDate: plan.outlook.find((day) => day.level === 'empty')?.date ?? null,
       doubts: stockDoubts(item),
     };
   });
@@ -285,7 +286,7 @@ async function readOverview(): Promise<OverviewRow[]> {
   const [{ pipes }, food, landmarks] = await Promise.all([
     judgeWater(),
     judgeFood(),
-    SELECT.from('oakhaven.curse.Landmarks').columns('name', 'kind', 'suppliedBy', 'households'),
+    SELECT.from('oakhaven.curse.Landmarks').columns('name', 'kind', 'gridCell', 'suppliedBy', 'households'),
   ]);
   const areas: AreaInput[] = landmarks
     .filter((l) => str(l.suppliedBy) !== null)
@@ -300,6 +301,7 @@ async function readOverview(): Promise<OverviewRow[]> {
       return {
         name,
         kind: str(l.kind) ?? '',
+        gridCell: str(l.gridCell),
         households: numOrNull(l.households),
         waterLevel: worst?.level ?? 'ok',
         worstPipe: worst?.pipeID ?? null,
@@ -316,6 +318,20 @@ async function readOverview(): Promise<OverviewRow[]> {
       doubts: f.doubts,
     })),
   );
+}
+
+/** The pipes for the village map: their route and Maren's level (one extra query for the routes). */
+async function readMapPipes(): Promise<{ pipeID: string; mapPath: string; waterLevel: PipeLevel }[]> {
+  const [{ pipes }, routes] = await Promise.all([
+    judgeWater(),
+    SELECT.from('oakhaven.curse.WaterPipes').columns('pipeID', 'mapPath'),
+  ]);
+  const levelOf = new Map([...pipes.values()].map((p) => [p.pipeID, p.level]));
+  return routes.map((r) => ({
+    pipeID: str(r.pipeID) ?? '',
+    mapPath: str(r.mapPath) ?? '',
+    waterLevel: levelOf.get(str(r.pipeID) ?? '') ?? 'ok',
+  }));
 }
 
 /** The weekly proposal (Rowan): every pipe and food item that needs money, in order, with the reason. */
@@ -350,6 +366,7 @@ export default class CouncilService extends cds.ApplicationService {
     // Not stored (@cds.persistence.skip): every read computes the proposal from the current data.
     this.on('READ', 'ProposalLines', readProposal);
     this.on('READ', 'VillageOverview', readOverview);
+    this.on('READ', 'MapPipes', readMapPipes);
     return super.init();
   }
 }

@@ -75,6 +75,8 @@ export interface FoodFacts {
   readonly belowMinimum: boolean;
   /** Days of use left above Tobin's comfort level (lower = more urgent); null = unknown. */
   readonly daysAboveComfort: number | null;
+  /** First morning the stock is gone if nothing is delivered (ISO date); null = not within a week. */
+  readonly emptyDate: string | null;
   readonly doubts: readonly DoubtReason[];
 }
 
@@ -110,6 +112,8 @@ export interface ProposalLine {
   readonly remaining: number | null;
   /** Ilse's signs, comma-separated ("" = none). */
   readonly doubtReasons: string;
+  /** Food only: the day it runs out without an emergency delivery (ISO date) — "wat kost niets doen". */
+  readonly emptyDate: string | null;
 }
 
 /** A line before the money is divided. */
@@ -140,6 +144,7 @@ function waterCandidate(pipe: WaterFacts, money: Money): Candidate | null {
       need,
       cost: money.repairCost,
       doubtReasons: [...new Set(pipe.doubts)].join(','),
+      emptyDate: null,
     },
     status,
     // Maren's order already puts people first, upstream first and her area order.
@@ -177,6 +182,7 @@ function foodCandidate(item: FoodFacts, money: Money): Candidate | null {
       need,
       cost: money.emergencyExtra,
       doubtReasons: [...new Set(item.doubts)].join(','),
+      emptyDate: item.emptyDate,
     },
     status,
     tieBreak: item.daysAboveComfort ?? Number.MAX_SAFE_INTEGER,

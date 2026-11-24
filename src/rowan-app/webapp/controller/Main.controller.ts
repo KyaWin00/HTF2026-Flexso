@@ -9,6 +9,7 @@ import type ODataListBinding from "sap/ui/model/odata/v4/ODataListBinding";
 import type ResourceBundle from "sap/base/i18n/ResourceBundle";
 import type ResourceModel from "sap/ui/model/resource/ResourceModel";
 import Formatter from "../model/formatter";
+import { villageMapSvg, type MapArea, type MapPipe } from "../model/villageMap";
 
 /** View state: the budget and the totals of the proposal. */
 interface PageState {
@@ -18,11 +19,17 @@ interface PageState {
   notProposedCount: number;
   /** Products whose number cannot be trusted — the same pantry for every area, shown once. */
   foodCheck: string;
+  /** The village map as SVG markup (model/villageMap.ts). */
+  mapSvg: string;
+  /** Share of the budget the proposal uses, for the budget bar. */
+  proposalPercent: number;
 }
 
 /** A VillageOverview row (CouncilService). */
 interface OverviewRow {
   area?: string;
+  gridCell?: string | null;
+  severity?: number;
   households?: number | null;
   waterLevel?: string;
   waterCause?: string;
@@ -34,7 +41,9 @@ interface OverviewRow {
 /** A ProposalLines row (CouncilService). */
 interface ProposalRow {
   position?: number | null;
+  kind?: string;
   title?: string;
+  emptyDate?: string | null;
   areas?: string;
   households?: number | null;
   need?: string | null;
@@ -77,6 +86,9 @@ const PRINT_STYLE = `
   .num { text-align: right; white-space: nowrap; }
   .box { display: inline-block; width: .4cm; height: .4cm; border: 1px solid #000; margin: 0 .1cm 0 .3cm; vertical-align: middle; }
   .page { page-break-after: always; }
+  .map svg { width: 100%; height: auto; margin: .3cm 0; border: 1px solid #999; }
+  .map .rowanMapName { font: bold 56px Arial, sans-serif; paint-order: stroke; stroke-width: 10px; }
+  .map .rowanMapStatus { font: 44px Arial, sans-serif; paint-order: stroke; stroke-width: 10px; }
 `;
 
 /**
@@ -93,7 +105,12 @@ export default class Main extends Controller {
     proposalLeft: 0,
     notProposedCount: 0,
     foodCheck: "",
+    mapSvg: "",
+    proposalPercent: 0,
   } satisfies PageState);
+
+  /** The pipes on the map (route + Maren's level), loaded once with the overview. */
+  private mapPipes: MapPipe[] = [];
 
   public onInit(): void {
     this.getView()?.setModel(this.state, "view");
@@ -118,9 +135,38 @@ export default class Main extends Controller {
   }
 
   /** The overview has loaded: the pantry's untrusted products are shown once, below the areas. */
-  public onOverviewUpdated(): void {
+  public async onOverviewUpdated(): Promise<void> {
     const rows = this.rowsOf<OverviewRow>("overviewList");
     this.state.setProperty("/foodCheck", rows.find((row) => row.foodCheck)?.foodCheck ?? "");
+    const model = this.getOwnerComponent()?.getModel() as ODataModel | undefined;
+    if (model) {
+      try {
+        const contexts = await model.bindList("/MapPipes").requestContexts(0, 100);
+        this.mapPipes = contexts.map((context) => context.getObject() as MapPipe);
+      } catch (error: unknown) {
+        Log.warning("Village map: pipes not loaded", String(error), "oakhaven.rowan");
+      }
+    }
+    const bundle = await this.getBundle();
+    this.state.setProperty("/mapSvg", `<div class="rowanMap">${this.mapSvg(rows, bundle, false)}</div>`);
+  }
+
+  /** The map with the areas' status in words (never colour alone). */
+  private mapSvg(rows: OverviewRow[], bundle: ResourceBundle, print: boolean): string {
+    const t = (key: string): string => bundle.getText(key) ?? key;
+    const areas: MapArea[] = rows.map((row) => ({
+      area: row.area,
+      gridCell: row.gridCell,
+      severity: row.severity,
+      label: bundle.getText("mapLabel", [
+        Formatter.levelText(row.waterLevel ?? null, t("levelAlarm"), t("levelAttention"), t("levelOk")),
+        Formatter.foodText(row.foodLevel ?? null, t("foodHunger"), t("foodTight"), t("foodOk")),
+      ]) ?? "",
+    }));
+    let image = sap.ui.require.toUrl("oakhaven/rowan/img/oakhaven-map.jpg");
+    // The print window is a blank page: it needs the full address of the map image.
+    if (print) image = new URL(image, (globalThis as unknown as { location: { href: string } }).location.href).href;
+    return villageMapSvg(image, this.mapPipes, areas, t("mapTitle"), print);
   }
 
   /** The proposal has loaded: what it spends, what is left, how many lines are left out. */
@@ -132,6 +178,7 @@ export default class Main extends Controller {
     this.state.setProperty("/proposalSpent", spent);
     this.state.setProperty("/proposalLeft", budget - spent);
     this.state.setProperty("/notProposedCount", rows.length - proposed.length);
+    this.state.setProperty("/proposalPercent", budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : 0);
   }
 
   /**
@@ -162,6 +209,19 @@ export default class Main extends Controller {
         t("reasonNobody"),
       );
 
+    const without = (row: ProposalRow): string =>
+      Formatter.withoutText(
+        row.kind ?? null,
+        row.need ?? null,
+        row.areas ?? null,
+        row.title ?? null,
+        row.emptyDate ?? null,
+        t("withoutNoWater"),
+        t("withoutWaterRisk"),
+        t("withoutFoodDate"),
+        t("withoutFood"),
+      );
+
     const areaRows = overview
       .map((row) => {
         const water = Formatter.levelText(row.waterLevel ?? null, t("levelAlarm"), t("levelAttention"), t("levelOk"));
@@ -183,7 +243,7 @@ export default class Main extends Controller {
           : "";
         return `<tr>
           <td class="big">${html(row.position)}</td>
-          <td><span class="big">${html(row.title)}</span><div>${html(reason(row))}</div>${doubt}</td>
+          <td><span class="big">${html(row.title)}</span><div>${html(reason(row))}</div><div class="muted">${html(without(row))}</div>${doubt}</td>
           <td class="num">${html(row.cost)} ${html(t("unitKronen"))}</td>
           <td class="num">${html(t("printYes"))}<span class="box"></span>${html(t("printNo"))}<span class="box"></span></td>
         </tr>`;
@@ -201,6 +261,7 @@ export default class Main extends Controller {
         <div class="meta">${html(t("printDate", [date]))}</div>
         <h1>${html(t("overviewTitle"))}</h1>
         <div class="muted">${html(t("overviewIntro"))}</div>
+        <div class="map">${this.mapSvg(overview, bundle, true)}</div>
         <table><tr><th>${html(t("colArea"))}</th><th>${html(t("labelWater"))}</th><th>${html(t("labelFood"))}</th></tr>${areaRows}</table>
         ${state.foodCheck ? `<p class="warn">⚠ ${html(t("foodCheck", [state.foodCheck]))}</p>` : ""}
       </div>
@@ -208,6 +269,7 @@ export default class Main extends Controller {
         <div class="meta">${html(t("printDate", [date]))}</div>
         <h1>${html(t("printPage2"))}</h1>
         <p class="big">${html(t("proposalSummary", [state.proposalSpent, state.budget, state.proposalLeft]))}</p>
+        <p class="muted">${html(t("leftOverNote"))}</p>
         <p class="muted">${html(t("proposalOrder"))}</p>
         <table><tr><th>#</th><th></th><th class="num">${html(t("colCost"))}</th><th class="num">${html(t("printDecided"))}</th></tr>${proposedRows}</table>
         ${leftOut ? `<p class="muted">${html(t("notProposedTitle", [state.notProposedCount]))}</p><ul class="muted">${leftOut}</ul>` : ""}

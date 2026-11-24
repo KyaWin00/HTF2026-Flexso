@@ -35,6 +35,9 @@
                 <VBox id="overviewBox" class="rowanTile sapUiMediumMarginBottom">
                     <Title id="overviewTitle" text="{i18n>overviewTitle}" level="H2" class="rowanHeadline" />
                     <Text id="overviewIntro" text="{i18n>overviewIntro}" class="rowanMuted sapUiSmallMarginBottom" />
+                    <!-- The village map: pipes and areas coloured by how they are doing (built in model/villageMap.ts) -->
+                    <core:HTML id="villageMap" content="{view>/mapSvg}" preferDOM="false" />
+                    <Text id="mapLegend" text="{i18n>mapLegend}" class="rowanMuted sapUiTinyMarginTop sapUiSmallMarginBottom" />
                     <List id="overviewList" noDataText="{i18n>noData}" showSeparators="Inner" backgroundDesign="Transparent"
                         updateFinished=".onOverviewUpdated"
                         items="{ path: '/VillageOverview', templateShareable: false }">
@@ -77,6 +80,10 @@
                     <Title id="proposalTitle" text="{i18n>proposalTitle}" level="H2" class="rowanHeadline" />
                     <Text id="proposalSummary" class="rowanSummary"
                         text="{ parts: ['i18n>proposalSummary', 'view>/proposalSpent', 'view>/budget', 'view>/proposalLeft'], formatter: 'formatMessage' }" />
+                    <ProgressIndicator id="budgetBar" class="rowanBudgetBar sapUiTinyMarginTop" state="Success" showValue="true"
+                        percentValue="{view>/proposalPercent}"
+                        displayValue="{ parts: ['i18n>budgetBar', 'view>/proposalSpent', 'view>/budget'], formatter: 'formatMessage' }" />
+                    <Text id="leftOverNote" text="{i18n>leftOverNote}" class="rowanMuted" />
                     <Text id="proposalOrder" text="{i18n>proposalOrder}" class="rowanMuted sapUiTinyMarginTop sapUiSmallMarginBottom" />
                     <List id="proposalList" noDataText="{i18n>noData}" showSeparators="Inner" backgroundDesign="Transparent"
                         updateFinished=".onProposalUpdated"
@@ -88,6 +95,9 @@
                                     <Title id="proposalLineTitle" text="{title}" level="H3" class="rowanLineTitle" />
                                     <Text id="proposalReason" class="rowanReason"
                                         text="{ parts: [{ path: 'need', targetType: 'any' }, { path: 'status', targetType: 'any' }, { path: 'areas', targetType: 'any' }, 'i18n>reasonNoWaterNow', 'i18n>reasonWaterRisk', 'i18n>reasonHunger', 'i18n>reasonOverBudget', 'i18n>reasonCheckFirst', 'i18n>reasonNoRule', 'i18n>reasonOrderInTime', 'i18n>reasonNobody'], formatter: 'Formatter.reasonText' }" />
+                                    <!-- What it costs to do nothing: water stays off, or the product runs out on that day -->
+                                    <ObjectStatus id="proposalWithout" icon="sap-icon://ti/hourglass-low" class="rowanWithout"
+                                        text="{ parts: [{ path: 'kind', targetType: 'any' }, { path: 'need', targetType: 'any' }, { path: 'areas', targetType: 'any' }, { path: 'title', targetType: 'any' }, { path: 'emptyDate', targetType: 'any' }, 'i18n>withoutNoWater', 'i18n>withoutWaterRisk', 'i18n>withoutFoodDate', 'i18n>withoutFood'], formatter: 'Formatter.withoutText' }" />
                                     <!-- Rowan: "dat zoiets duidelijk op ons blad staat, zodat we weten dat er iets niet klopt" -->
                                     <ObjectStatus id="proposalDoubt" state="Warning" icon="sap-icon://ti/alert-triangle"
                                         visible="{= !!%{doubtReasons} }"

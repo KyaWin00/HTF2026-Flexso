@@ -24,6 +24,8 @@ export type FoodLevel = 'hunger' | 'tight' | 'ok';
 export interface AreaInput {
   readonly name: string;
   readonly kind: string;
+  /** Cell on the village map (A1…H8). */
+  readonly gridCell: string | null;
   readonly households: number | null;
   readonly waterLevel: PipeLevel;
   readonly worstPipe: string | null;
@@ -42,6 +44,7 @@ export interface FoodInput {
 
 export interface OverviewRow {
   area: string;
+  gridCell: string | null;
   households: number | null;
   waterLevel: PipeLevel;
   /** The pipe that causes the water problem (empty when water is ok). */
@@ -85,6 +88,7 @@ export function overviewOfVillage(areas: readonly AreaInput[], food: readonly Fo
     const severity = Math.min(WATER_SEVERITY[area.waterLevel], FOOD_SEVERITY[areaFood.level]);
     return {
       area: area.name,
+      gridCell: area.gridCell,
       households: area.households,
       waterLevel: area.waterLevel,
       waterCause: area.waterLevel === 'ok' ? '' : (area.worstPipe ?? ''),
