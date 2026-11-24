@@ -9,6 +9,7 @@
  * and the part of its API this file uses is described in the small interfaces below.
  */
 import { startDemoSensorFeed } from './lib/demo-freshness';
+import { planMorningRound, type LandmarkFacts, type PipeFacts, type PipePlan } from './lib/morning-round';
 
 // 👋 EXAMPLE — the shape of a WaterPipes row as our handler sees it. Every field is optional:
 //    the client decides which fields it asks for ($select).
@@ -22,6 +23,27 @@ interface PipeRow {
 interface CdsService {
   init(): Promise<void>;
   after(event: string, entity: string, handler: (results: unknown) => unknown): void;
+  on(event: string, handler: (req: ActionRequest) => unknown): void;
+  on(event: string, entity: string, handler: (req: ActionRequest) => unknown): void;
+}
+
+/** The slice of a CAP request an action handler uses. */
+interface ActionRequest {
+  /** The action's parameters. */
+  readonly data: Readonly<Record<string, unknown>>;
+  /** For a bound action: a reference to the instance it was called on. */
+  readonly subject: unknown;
+  error(code: number, message: string, target?: string): void;
+}
+
+/** A single-row CQL SELECT. */
+interface SelectOneQuery extends PromiseLike<Readonly<Record<string, unknown>> | undefined> {
+  where(predicate: Readonly<Record<string, unknown>>): PromiseLike<Readonly<Record<string, unknown>> | undefined>;
+}
+
+/** A CQL SELECT with its columns set: await it as is, or narrow it down with `where`. */
+interface SelectQuery<T> extends PromiseLike<T[]> {
+  where(predicate: Readonly<Record<string, unknown>>): PromiseLike<T[]>;
 }
 
 /** The slice of the `cds` facade this file uses. */
@@ -30,17 +52,19 @@ interface CdsApi {
   readonly ql: {
     readonly SELECT: {
       from(entity: string): {
-        columns(...columns: readonly string[]): {
-          where(predicate: Readonly<Record<string, unknown>>): PromiseLike<PipeRow[]>;
-        };
+        columns<T = PipeRow>(...columns: readonly string[]): SelectQuery<T>;
       };
+      readonly one: { from(entity: unknown): SelectOneQuery };
     };
+    readonly INSERT: { into(entity: string): { entries(row: Readonly<Record<string, unknown>>): PromiseLike<unknown> } };
+    readonly UPDATE: (entity: unknown) => { with(changes: Readonly<Record<string, unknown>>): PromiseLike<number> };
   };
+  readonly utils: { uuid(): string };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const cds = require('@sap/cds') as CdsApi;
-const { SELECT } = cds.ql;
+const { SELECT, INSERT, UPDATE } = cds.ql;
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -81,10 +105,172 @@ async function addDaysSinceMaintenance(results: unknown): Promise<void> {
   }
 }
 
+// ---------------------------------------------------------------------------------------------
+// Maren's morning round (entities MorningRound and TodayStops)
+// ---------------------------------------------------------------------------------------------
+
+/** A WaterPipes row as the database returns it (Decimals may arrive as strings). */
+interface PipeDbRow {
+  ID: string;
+  pipeID: string;
+  startPoint: string | null;
+  endPoint: string | null;
+  nominalFlowRate: number | string | null;
+  currentFlowRate: number | string | null;
+  currentPressure: number | string | null;
+}
+
+/** A Landmarks row as the database returns it. */
+interface LandmarkDbRow {
+  name: string | null;
+  kind: string | null;
+  suppliedBy: string | null;
+  waterPriority: number | null;
+  households: number | null;
+}
+
+/** A MorningRound row as the client sees it: the plan of {@link PipePlan}, flattened for OData. */
+interface RoundRow {
+  ID?: string;
+  pipeID?: string;
+  visitOrder?: number | null;
+  today?: boolean | null;
+}
+
+function toNumber(value: number | string | null): number {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function toPipeFacts(row: PipeDbRow): PipeFacts {
+  return {
+    ID: row.ID,
+    pipeID: row.pipeID,
+    startPoint: row.startPoint ?? '',
+    endPoint: row.endPoint ?? '',
+    nominalFlowRate: toNumber(row.nominalFlowRate),
+    currentFlowRate: toNumber(row.currentFlowRate),
+    currentPressure: toNumber(row.currentPressure),
+  };
+}
+
+function toLandmarkFacts(row: LandmarkDbRow): LandmarkFacts {
+  return {
+    name: row.name ?? '',
+    kind: row.kind ?? '',
+    suppliedBy: row.suppliedBy,
+    waterPriority: row.waterPriority,
+    households: row.households,
+  };
+}
+
+/** The virtual fields of MorningRound for one plan (lists become comma-separated strings). */
+function toRoundFields(plan: PipePlan): Record<string, unknown> {
+  return {
+    level: plan.level,
+    flowPercent: plan.flowPercent,
+    lowFlow: plan.lowFlow,
+    lowPressure: plan.lowPressure,
+    visitOrder: plan.visitOrder,
+    today: plan.today,
+    servedAreas: plan.servedAreas.join(', '),
+    households: plan.households,
+    nobodyDependsOnIt: plan.nobodyDependsOnIt,
+    whyBeforeNext: plan.whyBeforeNext,
+    downstreamPipes: plan.downstreamPipes.join(','),
+  };
+}
+
+/** Visits in Maren's order first, then the pipes that need no visit. */
+function byVisitOrder(a: RoundRow, b: RoundRow): number {
+  const orderA = a.visitOrder ?? Number.MAX_SAFE_INTEGER;
+  const orderB = b.visitOrder ?? Number.MAX_SAFE_INTEGER;
+  return orderA - orderB || (a.pipeID ?? '').localeCompare(b.pipeID ?? '');
+}
+
+/** Which rows of the round an entity shows. */
+type RoundSelection = (row: RoundRow) => boolean;
+const ALL_PIPES: RoundSelection = () => true;
+const TODAY: RoundSelection = (row) => row.today === true;
+const LATER: RoundSelection = (row) => row.visitOrder !== null && row.visitOrder !== undefined && row.today !== true;
+
+/**
+ * Fills in the plan of every pipe read from MorningRound / TodayStops / LaterStops and sorts the
+ * result. The plan depends on ALL pipes (upstream, people behind it), so it always reads the whole
+ * network — two queries, whatever the client asked for. `keep` decides which rows remain.
+ * Sorting and filtering happen here because the order is computed, not stored: the network is small
+ * (six pipes), so the whole list always fits in one page ($count/$top are not meaningful here).
+ */
+async function planRound(results: unknown, keep: RoundSelection): Promise<void> {
+  const rows = (Array.isArray(results) ? results : [results]).filter(
+    (row): row is RoundRow => row !== null && typeof row === 'object',
+  );
+  if (rows.length === 0) return;
+
+  const [pipes, landmarks] = await Promise.all([
+    SELECT.from('oakhaven.curse.WaterPipes').columns<PipeDbRow>(
+      'ID', 'pipeID', 'startPoint', 'endPoint', 'nominalFlowRate', 'currentFlowRate', 'currentPressure',
+    ),
+    SELECT.from('oakhaven.curse.Landmarks').columns<LandmarkDbRow>(
+      'name', 'kind', 'suppliedBy', 'waterPriority', 'households',
+    ),
+  ]);
+  const plans = planMorningRound(pipes.map(toPipeFacts), landmarks.map(toLandmarkFacts));
+
+  for (const row of rows) {
+    const plan = plans.get(row.ID ?? '');
+    if (plan) Object.assign(row, toRoundFields(plan));
+  }
+  if (Array.isArray(results)) {
+    const ordered = rows.sort(byVisitOrder).filter(keep);
+    results.splice(0, results.length, ...ordered);
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Reports from villagers (entity WaterReports, actions reportProblem and markHandled)
+// ---------------------------------------------------------------------------------------------
+
+/** The values of the ReportProblem enum in db/schema.cds. */
+const REPORT_PROBLEMS: ReadonlySet<string> = new Set(['noWater', 'littleWater', 'leak', 'other']);
+const NOTE_MAX_LENGTH = 500;
+
+/** A villager reports a problem at their place: check it, store it, return the new report. */
+async function reportProblem(req: ActionRequest): Promise<unknown> {
+  const areaId = typeof req.data.area_ID === 'string' ? req.data.area_ID : '';
+  const problem = typeof req.data.problem === 'string' ? req.data.problem : '';
+  const note = typeof req.data.note === 'string' ? req.data.note.trim() : '';
+
+  if (!REPORT_PROBLEMS.has(problem)) return req.error(400, 'Kies wat je merkt aan het water.', 'problem');
+  if (note.length > NOTE_MAX_LENGTH) return req.error(400, `Je opmerking is te lang (max. ${NOTE_MAX_LENGTH} tekens).`, 'note');
+  // Only places that get their water through a pipe: otherwise nobody knows which pipe to check.
+  const area = areaId ? await SELECT.one.from('oakhaven.curse.Landmarks').where({ ID: areaId }) : undefined;
+  if (!area || !area.suppliedBy) return req.error(400, 'Kies de plek waar je woont of werkt.', 'area_ID');
+
+  const ID = cds.utils.uuid();
+  await INSERT.into('oakhaven.curse.WaterReports').entries({ ID, area_ID: areaId, problem, note: note || null });
+  return SELECT.one.from('WaterSupplyService.WaterReports').where({ ID });
+}
+
+/** Maren marks a report as dealt with. */
+async function markHandled(req: ActionRequest): Promise<unknown> {
+  await UPDATE(req.subject).with({ handled: true });
+  return SELECT.one.from(req.subject);
+}
+
 export default class WaterSupplyService extends cds.ApplicationService {
   override async init(): Promise<void> {
     // 👋 EXAMPLE — register the handler: after every READ of WaterPipes, add daysSinceMaintenance.
     this.after('READ', 'WaterPipes', addDaysSinceMaintenance);
+
+    // Maren's morning round: the plan for every pipe, and only today's visits.
+    this.after('READ', 'MorningRound', (results) => planRound(results, ALL_PIPES));
+    this.after('READ', 'TodayStops', (results) => planRound(results, TODAY));
+    this.after('READ', 'LaterStops', (results) => planRound(results, LATER));
+
+    // Reports from villagers.
+    this.on('reportProblem', reportProblem);
+    this.on('markHandled', 'WaterReports', markHandled);
 
     startDemoSensorFeed();
     return super.init();

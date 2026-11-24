@@ -24,4 +24,51 @@ service WaterSupplyService @(path: 'water-supply', impl: 'srv/water-supply-servi
 
   @readonly
   entity Landmarks  as projection on db.Landmarks;
+
+  /** What villagers report about the water at their place; newest first in the app. */
+  @readonly
+  entity WaterReports as projection on db.WaterReports {
+    *,
+    area.name       as place  : String,
+    area.suppliedBy as pipeID : String
+  } actions {
+    /** Maren: this report is dealt with. */
+    action markHandled() returns WaterReports;
+  };
+
+  /** A villager reports a problem with the water at their place. */
+  action reportProblem(area_ID : UUID, problem : String, note : String) returns WaterReports;
+
+  /**
+   * Maren's morning round (app src/maren-app): every pipe with its level and its place in her
+   * visiting order, sorted — first visit first. The rules are in srv/lib/morning-round.ts; all
+   * virtual fields are filled in by planMorningRound in water-supply-service.ts.
+   */
+  @readonly
+  @cds.redirection.target: false
+  entity MorningRound as projection on db.WaterPipes {
+    ID, pipeID, location, startPoint, endPoint, pipelineType,
+    nominalFlowRate, currentFlowRate, currentPressure, mapPath,
+    virtual null as level             : String,  // 'alarm' | 'attention' | 'ok'
+    virtual null as flowPercent       : Integer, // current flow as % of normal
+    virtual null as lowFlow           : Boolean, // below the flow limit of its level
+    virtual null as lowPressure       : Boolean, // below the pressure limit of its level
+    virtual null as visitOrder        : Integer, // 1 = go first; null = no visit needed
+    virtual null as today             : Boolean, // one of today's (max. 2) repairs
+    virtual null as servedAreas       : String,  // landmarks behind this pipe, comma-separated
+    virtual null as households        : Integer, // households behind it, where known
+    virtual null as nobodyDependsOnIt : Boolean,
+    virtual null as whyBeforeNext     : String,  // WhyCode in srv/lib/morning-round.ts
+    virtual null as downstreamPipes   : String   // pipeIDs that run dry if this one fails
+  };
+
+  /** Only today's visits (at most two: "meer dan twee per dag lukt ons niet"), first one first. */
+  @readonly
+  @cds.redirection.target: false
+  entity TodayStops as projection on MorningRound;
+
+  /** The visits that wait until a later day, in Maren's order. */
+  @readonly
+  @cds.redirection.target: false
+  entity LaterStops as projection on MorningRound;
 }

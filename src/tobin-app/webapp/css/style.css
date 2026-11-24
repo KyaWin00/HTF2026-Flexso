@@ -1,0 +1,179 @@
+/* Week van de bakker. Tobin reads this at 5 am with his coffee: one calm column, the answer first.
+   Look: Hack The Future 2026 ("The Curse of Achrona"), on top of sap_horizon_dark.
+   The brand block below is the ONLY place with hard-coded colours; everything else uses
+   variables. Status colours stay SAP semantic (Error/Warning/Success) with text + icon. 0.5rem grid. */
+
+/* ---------- Hack The Future 2026 brand (tokens from the :root of 2026.hackthefuture.be) ----------
+   Set on the app's own root (the DynamicPage), so the launchpad and the other apps keep Horizon.
+   Not used on purpose: the orange "creatives" gradient (orange means "bestel uiterlijk morgen")
+   and the blue "hackers" gradient; a brand colour must never look like a status. */
+.tobinApp {
+	--htf-dark-grey: #160f1f;
+	--htf-purple: #a52bd9;
+	--htf-pink: #e292f4;
+	--htf-light-blue: #e1e7ff;
+	--htf-middle-grey: #7b7a8f;
+
+	/* Derived from the tokens above (no new colours). Contrast on --htf-surface:
+	   light blue 14:1, muted 7.7:1, pink 8:1 (all WCAG AA for normal text). */
+	--htf-surface: color-mix(in srgb, var(--htf-purple) 10%, var(--htf-dark-grey));
+	--htf-edge: color-mix(in srgb, var(--htf-purple) 55%, var(--htf-dark-grey));
+	--htf-line: color-mix(in srgb, var(--htf-purple) 30%, var(--htf-dark-grey));
+	--htf-muted: color-mix(in srgb, var(--htf-light-blue) 45%, var(--htf-middle-grey));
+	/* The one brand gradient in this app: a thin top edge on the morning message. */
+	--htf-accent-gradient: linear-gradient(90deg, var(--htf-purple), var(--htf-pink));
+
+	/* The page itself: the DynamicPage has backgroundDesign="Transparent" in the view, so this
+	   background on its own root shows through (no styling of the control's inner DOM). */
+	background: var(--htf-dark-grey);
+
+	/* SAP theme parameters follow the brand inside this app, so the controls do too. */
+	--sapBrandColor: var(--htf-purple);
+	--sapBackgroundColor: var(--htf-dark-grey);
+	--sapObjectHeader_Background: var(--htf-dark-grey);
+	--sapTextColor: var(--htf-light-blue);
+	--sapGroup_TitleTextColor: var(--htf-light-blue);
+	--sapContent_IconColor: var(--htf-light-blue);
+	--sapContent_LabelColor: var(--htf-muted);
+	--sapTile_Background: var(--htf-surface);
+	--sapTile_BorderColor: var(--htf-edge);
+}
+
+/* Headings in the event's voice: bold, uppercase, tight. Etna and P22 Morris are licensed fonts
+   and not loaded; Horizon's own 72 Black carries the feel. Pink is a brand colour, not a status. */
+.tobinApp .tobinHeading,
+.tobinApp .tobinSection,
+.tobinApp .tobinName {
+	font-family: var(--sapFontBlackFamily);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.tobinApp .tobinSection,
+.tobinApp .tobinName {
+	color: var(--htf-pink);
+}
+
+.tobinLogo {
+	color: var(--htf-pink);
+}
+
+.tobinPage {
+	max-width: 40rem;
+	margin: 0 auto;
+}
+
+/* One flat Horizon tile for the message and for every ingredient: no shadows, no gradients. */
+.tobinTile {
+	box-sizing: border-box;
+	padding: 1rem;
+	margin-bottom: 0.75rem;
+	background: var(--sapTile_Background);
+	border: 1px solid var(--sapTile_BorderColor);
+	border-radius: var(--sapTile_BorderCornerRadius);
+}
+
+/* ---------- The morning message ---------- */
+
+/* The one brand gradient: a thin purple-to-pink edge on top of the message. */
+.tobinMessage {
+	padding-top: 1.25rem;
+	background: var(--htf-accent-gradient) top / 100% 0.25rem no-repeat, var(--sapTile_Background);
+}
+
+/* "JE BERICHT VOOR …": the message header in the event's label style. */
+.tobinApp .tobinMessageMeta {
+	font-family: var(--sapFontBoldFamily);
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--htf-pink);
+}
+
+.tobinMeta {
+	font-size: var(--sapFontSize);
+	color: var(--sapContent_LabelColor);
+}
+
+/* The answer to his question: the largest text on the page. */
+.tobinHeadline {
+	margin: 0.5rem 0;
+	font-size: var(--sapFontHeader3Size);
+	font-family: var(--sapFontBoldFamily);
+}
+
+.tobinMessageLine {
+	margin-top: 0.5rem;
+}
+
+.tobinLineText {
+	font-size: 1.125rem;
+	line-height: 1.4;
+	color: var(--sapTextColor);
+}
+
+/* ---------- One card per ingredient ---------- */
+
+.tobinCard {
+	width: 100%;
+	gap: 0.5rem;
+}
+
+.tobinApp .tobinName {
+	font-size: 1.25rem;
+}
+
+/* What to do: as big as the name. */
+.tobinAnswer {
+	font-size: 1.25rem;
+	font-weight: bold;
+	color: var(--sapTextColor);
+}
+
+.tobinOrderRow {
+	gap: 0 1rem;
+}
+
+.tobinFacts {
+	margin-top: 0.25rem;
+}
+
+.tobinFact {
+	padding: 0.25rem 0;
+	gap: 1rem;
+}
+
+.tobinFactText {
+	font-size: var(--sapFontLargeSize);
+	color: var(--sapTextColor);
+}
+
+.tobinStrong {
+	font-weight: bold;
+}
+
+/* 7-day outlook: one row per morning, quantities right-aligned so the decline reads top to bottom. */
+.tobinOutlookTitle {
+	margin-top: 0.5rem;
+}
+
+.tobinDay {
+	padding: 0.25rem 0;
+	gap: 0.5rem;
+}
+
+/* ---------- How we count ---------- */
+
+.tobinFootnote {
+	margin: 0.5rem 0 1rem;
+	gap: 0.25rem;
+}
+
+@media (min-width: 600px) {
+	.tobinTile {
+		padding: 1.5rem;
+	}
+
+	.tobinMessage {
+		padding-top: 1.75rem;
+	}
+}

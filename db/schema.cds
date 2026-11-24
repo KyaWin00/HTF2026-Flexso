@@ -58,6 +58,25 @@ entity Repairs : cuid, managed {
   repairedBy : String;
 }
 
+/** What a villager notices at their tap. */
+type ReportProblem : String enum {
+  noWater;
+  littleWater;
+  leak;
+  other;
+}
+
+/** A villager reports that the water at their place is not right (sent from src/maren-app). */
+entity WaterReports : cuid, managed {
+  /** Where: a landmark that gets water through a pipe (`suppliedBy` is filled in). */
+  area    : Association to Landmarks;
+  problem : ReportProblem;
+  /** Free text from the villager, optional. */
+  note    : String(500);
+  /** Maren marked it as dealt with. */
+  handled : Boolean default false;
+}
+
 /** Kind of a village landmark. */
 type LandmarkKind : String enum {
   spring;
@@ -78,6 +97,11 @@ entity Landmarks : cuid, managed {
   gridCell   : String(2);
   /** pipeID of the branch that feeds this area (residential / bakery / farm only). */
   suppliedBy : String;
+  /** Maren's order when two pipes fail that are not on the same line: 1 = goes first.
+   *  Empty = Maren gave no place in her order. */
+  waterPriority : Integer;
+  /** Number of households living here, as told by a villager. Empty = unknown. */
+  households    : Integer;
 }
 
 // ---------------------------------------------------------------------------
@@ -93,6 +117,13 @@ entity StockItems : cuid, managed {
   currentQuantity : Decimal(9, 2);   // in `unit`
   minStockLevel   : Decimal(9, 2);   // in `unit` — the level the village wants to stay above
   consumptionRate : Decimal(9, 2);   // `unit` per day the village uses up
+  /** Days from ordering to delivery, as told by Tobin (e.g. milk ordered today comes tomorrow = 1).
+   *  Empty = nobody told us. */
+  leadTimeDays    : Integer;
+  /** Who delivers it, as told by Tobin. */
+  supplier        : String;
+  /** One of Tobin's bread ingredients: "Voor mijn brood draait het vooral om bloem, melk en boter". */
+  forBread        : Boolean default false;
   receivals       : Composition of many StockReceivals on receivals.item = $self;
 }
 

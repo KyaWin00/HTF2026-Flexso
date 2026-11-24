@@ -1,0 +1,197 @@
+<mvc:View
+    controllerName="oakhaven.tobin.controller.Main"
+    xmlns="sap.m"
+    xmlns:mvc="sap.ui.core.mvc"
+    xmlns:f="sap.f"
+    xmlns:core="sap.ui.core"
+    core:require="{
+        formatter: 'oakhaven/tobin/model/formatter',
+        formatMessage: 'sap/base/strings/formatMessage',
+        ODataDate: 'sap/ui/model/odata/type/Date',
+        Decimal: 'sap/ui/model/odata/type/Decimal',
+        UIDate: 'sap/ui/model/type/Date'
+    }"
+    displayBlock="true"
+    height="100%">
+    <f:DynamicPage id="page" backgroundDesign="Transparent" class="tobinApp">
+        <f:title>
+            <f:DynamicPageTitle id="pageTitle">
+                <f:heading>
+                    <HBox id="pageHeading" alignItems="Center">
+                        <core:Icon id="pageLogo" src="sap-icon://ti/baguette" size="1.75rem" class="tobinLogo sapUiSmallMarginEnd" />
+                        <Title id="pageTitleText" text="{i18n>appTitle}" level="H1" class="tobinHeading" />
+                    </HBox>
+                </f:heading>
+                <f:expandedContent>
+                    <Label id="pageSubtitle" text="{i18n>pageSubtitle}" wrapping="true" />
+                </f:expandedContent>
+            </f:DynamicPageTitle>
+        </f:title>
+        <f:content>
+            <VBox id="pageContent" class="tobinPage">
+
+                <!-- ===================== The 5 am message: "kan ik volgende week nog bakken?" =====================
+                     The answer first (headline), then one line per thing to do. -->
+                <VBox id="message" class="tobinTile tobinMessage" busy="{view>/busy}" busyIndicatorDelay="0">
+                    <Text
+                        id="messageMeta"
+                        class="tobinMeta tobinMessageMeta"
+                        text="{ parts: [ 'i18n>messageMeta', { path: 'view>/today', type: 'UIDate', formatOptions: { pattern: 'EEEE d MMMM' } } ], formatter: 'formatMessage' }" />
+                    <Title id="messageHeadline" text="{view>/headline}" level="H2" wrapping="true" class="tobinHeadline" />
+                    <VBox id="messageLines" items="{ path: 'view>/lines', templateShareable: false }">
+                        <HBox id="messageLine" alignItems="Start" class="tobinMessageLine">
+                            <core:Icon
+                                id="messageLineIcon"
+                                src="{view>icon}"
+                                color="{ path: 'view>state', formatter: 'formatter.stateColor' }"
+                                size="1.5rem"
+                                class="sapUiSmallMarginEnd" />
+                            <Text id="messageLineText" text="{view>text}" class="tobinLineText" />
+                        </HBox>
+                    </VBox>
+                </VBox>
+
+                <!-- ===================== One card per bread ingredient, most urgent first ===================== -->
+                <List
+                    id="ingredientList"
+                    noDataText="{i18n>noData}"
+                    busyIndicatorDelay="0"
+                    showSeparators="None"
+                    backgroundDesign="Transparent"
+                    updateFinished=".onIngredientsUpdated"
+                    items="{ path: 'food>/BakeryWeek', templateShareable: false, events: { dataReceived: '.onDataReceived' } }">
+                    <CustomListItem id="ingredientItem">
+                        <VBox id="ingredientCard" class="tobinTile tobinCard">
+                            <!-- Name and what to do, on one row -->
+                            <HBox id="ingredientHeader" alignItems="Center" justifyContent="SpaceBetween" wrap="Wrap" class="tobinCardHead">
+                                <Title
+                                    id="ingredientName"
+                                    level="H3"
+                                    class="tobinName"
+                                    text="{= %{food>itemID} === 'MILK' ? ${i18n>ingredientMILK} : %{food>itemID} === 'FLOUR' ? ${i18n>ingredientFLOUR} : %{food>itemID} === 'BUTTER' ? ${i18n>ingredientBUTTER} : %{food>name} }" />
+                                <ObjectStatus
+                                    id="ingredientAdvice"
+                                    text="{= %{food>advice} === 'impossible' ? ${i18n>adviceImpossible} : %{food>advice} === 'late' ? ${i18n>adviceLate} : %{food>advice} === 'today' ? ${i18n>adviceToday} : %{food>advice} === 'soon' ? ${i18n>adviceSoon} : %{food>advice} === 'ok' ? ${i18n>adviceOk} : ${i18n>adviceUnknown} }"
+                                    icon="{ path: 'food>advice', formatter: 'formatter.adviceIcon' }"
+                                    state="{ path: 'food>advice', formatter: 'formatter.adviceState' }"
+                                    inverted="{= %{food>advice} === 'impossible' || %{food>advice} === 'late' || %{food>advice} === 'today' }" />
+                            </HBox>
+
+                            <!-- A quantity that cannot be true: say once what to do -->
+                            <Text
+                                id="impossibleOrderBelow"
+                                class="tobinAnswer"
+                                visible="{= %{food>quantityTrusted} === false &amp;&amp; %{food>orderBelowQuantity} !== null }"
+                                text="{ parts: [ { path: 'i18n>countAgainOrderBelow' }, { path: 'food>orderBelowQuantity', type: 'Decimal', formatOptions: { minFractionDigits: 0, maxFractionDigits: 2 }, constraints: { precision: 9, scale: 2 } }, { path: 'food>unit', targetType: 'any' }, { path: 'i18n>unitKG' }, { path: 'i18n>unitL' } ], formatter: 'formatter.quantityText' }" />
+                            <Text id="impossibleExplain" text="{i18n>impossibleExplain}" visible="{= %{food>quantityTrusted} === false }" class="tobinFactText" />
+
+                            <!-- The order date, when it is not "today" (the status above already says that) -->
+                            <HBox
+                                id="factOrderRow"
+                                justifyContent="SpaceBetween"
+                                alignItems="Baseline"
+                                wrap="Wrap"
+                                class="tobinFact tobinOrderRow"
+                                visible="{= %{food>latestOrderDate} !== null &amp;&amp; (%{food>advice} === 'soon' || %{food>advice} === 'ok') }">
+                                <Label id="factOrderLabel" text="{i18n>factOrderBy}" class="tobinOrderLabel" />
+                                <Text
+                                    id="factOrderValue"
+                                    class="tobinAnswer"
+                                    text="{ path: 'food>latestOrderDate', type: 'ODataDate', formatOptions: { pattern: 'EEEE d MMMM' } }" />
+                            </HBox>
+
+                            <!-- Why: the facts behind the advice. Label left, value right. -->
+                            <VBox id="facts" class="tobinFacts">
+                                <HBox id="factNowRow" justifyContent="SpaceBetween" alignItems="Center" class="tobinFact">
+                                    <Label id="factNowLabel" text="{i18n>factNow}" />
+                                    <ObjectNumber
+                                        id="factNowValue"
+                                        number="{ path: 'food>currentQuantity', type: 'Decimal', formatOptions: { minFractionDigits: 0, maxFractionDigits: 2 }, constraints: { precision: 9, scale: 2 } }"
+                                        unit="{= %{food>unit} === 'KG' ? ${i18n>unitKG} : %{food>unit} === 'L' ? ${i18n>unitL} : %{food>unit} }"
+                                        state="{= %{food>quantityTrusted} === false ? 'Error' : %{food>belowComfortNow} ? 'Warning' : 'None' }"
+                                        emphasized="true" />
+                                </HBox>
+                                <HBox id="factComfortRow" justifyContent="SpaceBetween" alignItems="Center" class="tobinFact">
+                                    <Label id="factComfortLabel" text="{i18n>factComfort}" />
+                                    <ObjectNumber
+                                        id="factComfortValue"
+                                        number="{ path: 'food>minStockLevel', type: 'Decimal', formatOptions: { minFractionDigits: 0, maxFractionDigits: 2 }, constraints: { precision: 9, scale: 2 } }"
+                                        unit="{= %{food>unit} === 'KG' ? ${i18n>unitKG} : %{food>unit} === 'L' ? ${i18n>unitL} : %{food>unit} }"
+                                        emphasized="false" />
+                                </HBox>
+                                <HBox id="factUseRow" justifyContent="SpaceBetween" alignItems="Center" class="tobinFact">
+                                    <Label id="factUseLabel" text="{i18n>factUsePerDay}" />
+                                    <ObjectNumber
+                                        id="factUseValue"
+                                        number="{ path: 'food>consumptionRate', type: 'Decimal', formatOptions: { minFractionDigits: 0, maxFractionDigits: 2 }, constraints: { precision: 9, scale: 2 } }"
+                                        unit="{= %{food>unit} === 'KG' ? ${i18n>unitKG} : %{food>unit} === 'L' ? ${i18n>unitL} : %{food>unit} }"
+                                        emphasized="false" />
+                                </HBox>
+                                <HBox id="factBelowRow" justifyContent="SpaceBetween" alignItems="Center" class="tobinFact" visible="{= %{food>quantityTrusted} !== false &amp;&amp; %{food>belowComfortDate} !== null }">
+                                    <Label id="factBelowLabel" text="{i18n>factBelowComfort}" />
+                                    <Text
+                                        id="factBelowValue"
+                                        textAlign="End"
+                                        class="tobinFactText"
+                                        text="{= %{food>belowComfortNow} ? ${i18n>factBelowComfortNow} : ${ path: 'food>belowComfortDate', type: 'ODataDate', formatOptions: { pattern: 'EEEE d MMMM' } } }" />
+                                </HBox>
+                                <HBox id="factDeliveryRow" justifyContent="SpaceBetween" alignItems="Center" class="tobinFact" visible="{= %{food>leadTimeDays} !== null }">
+                                    <Label id="factDeliveryLabel" text="{i18n>factDelivery}" />
+                                    <Text
+                                        id="factDeliveryValue"
+                                        textAlign="End"
+                                        class="tobinFactText"
+                                        text="{ parts: [ { path: 'food>leadTimeDays', targetType: 'any' }, { path: 'food>supplier', targetType: 'any' }, { path: 'i18n>deliveryOneDay' }, { path: 'i18n>deliveryManyDays' } ], formatter: 'formatter.deliveryText' }" />
+                                </HBox>
+                            </VBox>
+
+                            <!-- The coming week: "of ik volgende week nog kan bakken". One row per morning. -->
+                            <Title id="outlookTitle" text="{i18n>outlookTitle}" level="H4" class="tobinSection tobinOutlookTitle" visible="{= %{food>quantityTrusted} !== false }" />
+                            <VBox
+                                id="outlook"
+                                visible="{= %{food>quantityTrusted} !== false }"
+                                items="{ path: 'food>outlook', templateShareable: false }">
+                                <HBox id="outlookDay" alignItems="Center" renderType="Bare" class="tobinDay">
+                                    <Text id="outlookDayToday" text="{i18n>outlookToday}" wrapping="false" visible="{= %{food>day} === 0 }" class="tobinStrong tobinFactText">
+                                        <layoutData><FlexItemData id="outlookDayTodayLayout" baseSize="5rem" shrinkFactor="0" /></layoutData>
+                                    </Text>
+                                    <Text
+                                        id="outlookDayDate"
+                                        class="tobinFactText"
+                                        wrapping="false"
+                                        visible="{= %{food>day} !== 0 }"
+                                        text="{ path: 'food>date', type: 'ODataDate', formatOptions: { pattern: 'EEE d MMM' } }">
+                                        <layoutData><FlexItemData id="outlookDayDateLayout" baseSize="5rem" shrinkFactor="0" /></layoutData>
+                                    </Text>
+                                    <ObjectNumber
+                                        id="outlookDayQuantity"
+                                        textAlign="End"
+                                        number="{ path: 'food>quantity', type: 'Decimal', formatOptions: { minFractionDigits: 0, maxFractionDigits: 2 }, constraints: { precision: 9, scale: 2 } }"
+                                        unit="{= %{food>unit} === 'KG' ? ${i18n>unitKG} : %{food>unit} === 'L' ? ${i18n>unitL} : %{food>unit} }"
+                                        emphasized="false">
+                                        <layoutData><FlexItemData id="outlookDayQuantityLayout" growFactor="1" /></layoutData>
+                                    </ObjectNumber>
+                                    <ObjectStatus
+                                        id="outlookDayLevel"
+                                        text="{= %{food>level} === 'ok' ? ${i18n>levelOk} : %{food>level} === 'belowComfort' ? ${i18n>levelBelowComfort} : ${i18n>levelEmpty} }"
+                                        icon="{ path: 'food>level', formatter: 'formatter.levelIcon' }"
+                                        state="{ path: 'food>level', formatter: 'formatter.levelState' }">
+                                        <layoutData><FlexItemData id="outlookDayLevelLayout" baseSize="7.5rem" shrinkFactor="0" /></layoutData>
+                                    </ObjectStatus>
+                                </HBox>
+                            </VBox>
+                        </VBox>
+                    </CustomListItem>
+                </List>
+
+                <!-- How the advice is calculated: open about the rules, one line each -->
+                <VBox id="howWeCount" class="tobinFootnote">
+                    <Title id="howWeCountTitle" text="{i18n>howWeCountTitle}" level="H4" class="tobinSection" />
+                    <Text id="howWeCount1" text="{i18n>howWeCount1}" class="tobinMeta" />
+                    <Text id="howWeCount2" text="{i18n>howWeCount2}" class="tobinMeta" />
+                    <Text id="howWeCount3" text="{i18n>howWeCount3}" class="tobinMeta" />
+                </VBox>
+            </VBox>
+        </f:content>
+    </f:DynamicPage>
+</mvc:View>
