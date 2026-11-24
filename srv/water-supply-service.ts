@@ -132,6 +132,7 @@ interface PipeDbRow {
 
 /** Who changed a record and when — the `managed` fields Ilse's signs look at. */
 interface StampDbRow {
+  ID?: string;
   pipe_ID: string | null;
   createdBy: string | null;
   createdAt: string | null;
@@ -291,8 +292,8 @@ async function planRound(results: unknown, keep: RoundSelection): Promise<void> 
   );
   if (rows.length === 0) return;
 
-  const stamp = ['pipe_ID', 'createdBy', 'createdAt', 'modifiedBy', 'modifiedAt'];
-  const [pipes, landmarks, sensors, repairs, reports] = await Promise.all([
+  const stamp = ['ID', 'pipe_ID', 'createdBy', 'createdAt', 'modifiedBy', 'modifiedAt'];
+  const [pipes, landmarks, sensors, repairs, reports, marks] = await Promise.all([
     SELECT.from('oakhaven.curse.WaterPipes').columns<PipeDbRow>(
       'ID', 'pipeID', 'startPoint', 'endPoint', 'nominalFlowRate', 'currentFlowRate', 'currentPressure',
       'createdBy', 'createdAt', 'modifiedBy', 'modifiedAt', 'repairedAt',
@@ -305,6 +306,9 @@ async function planRound(results: unknown, keep: RoundSelection): Promise<void> 
     // Open reports only. Until `npm run db:reset` created the table, there are simply none.
     SELECT.from('oakhaven.curse.WaterReports').columns<ReportDbRow>('area_ID', 'problem').where({ handled: false })
       .then((r) => r, (): ReportDbRow[] => []),
+    // Ilse's active marks "niet te vertrouwen" (InvestigationService). None before db:reset created the table.
+    SELECT.from('oakhaven.curse.TrustMarks').columns<{ recordType: string; recordId: string }>('recordType', 'recordId').where({ active: true })
+      .then((r) => r, (): { recordType: string; recordId: string }[] => []),
   ]);
   const openReports = reportsByPipe(reports, landmarks);
   const plans = planMorningRound(
@@ -312,6 +316,17 @@ async function planRound(results: unknown, keep: RoundSelection): Promise<void> 
     landmarks.map(toLandmarkFacts),
   );
   const doubts = doubtsByPipe(pipes, sensors, repairs);
+  // "zodat Maren, Tobin en de raad er niet op handelen": a mark on the pipe, its meter or one of its
+  // repairs puts "ga eerst zelf kijken" on the pipe in Maren's round.
+  const pipeOfRecord = new Map<string, string>([
+    ...pipes.map((p): [string, string] => [`WaterPipes:${p.ID}`, p.ID]),
+    ...sensors.map((s): [string, string] => [`Sensors:${s.ID ?? ''}`, s.pipe_ID ?? '']),
+    ...repairs.map((r): [string, string] => [`Repairs:${r.ID ?? ''}`, r.pipe_ID ?? '']),
+  ]);
+  for (const mark of marks) {
+    const pipeId = pipeOfRecord.get(`${mark.recordType}:${mark.recordId}`);
+    if (pipeId) doubts.set(pipeId, [...(doubts.get(pipeId) ?? []).filter((d) => d !== 'markedByIlse'), 'markedByIlse']);
+  }
 
   for (const row of rows) {
     const plan = plans.get(row.ID ?? '');

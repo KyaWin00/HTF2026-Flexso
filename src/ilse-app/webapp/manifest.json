@@ -12,13 +12,8 @@
     "title": "{{appTitle}}",
     "description": "{{appDescription}}",
     "dataSources": {
-      "waterSupplyService": {
-        "uri": "/odata/v4/water-supply/",
-        "type": "OData",
-        "settings": { "odataVersion": "4.0" }
-      },
-      "foodStockService": {
-        "uri": "/odata/v4/food-stock/",
+      "investigationService": {
+        "uri": "/odata/v4/investigation/",
         "type": "OData",
         "settings": { "odataVersion": "4.0" }
       }
@@ -65,11 +60,7 @@
         }
       },
       "": {
-        "dataSource": "waterSupplyService",
-        "settings": { "operationMode": "Server", "autoExpandSelect": true, "earlyRequests": true }
-      },
-      "food": {
-        "dataSource": "foodStockService",
+        "dataSource": "investigationService",
         "settings": { "operationMode": "Server", "autoExpandSelect": true, "earlyRequests": true }
       }
     },

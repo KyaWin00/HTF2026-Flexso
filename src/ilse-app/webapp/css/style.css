@@ -1,1 +1,207 @@
-/* Custom styles for this app. Use theme parameters (var(--sap…)), never hard-coded colours. */
+/* Ilses register — the SAP Horizon theme as it is; theme parameters only.
+   One own drawing: the night clock (SVG). */
+
+html,
+body {
+    height: 100%;
+}
+
+.ilseContent {
+    width: 100%;
+}
+
+/* Report (left) and night clock (right) side by side on a laptop, stacked on small screens. */
+.ilseTop {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2rem;
+    margin-bottom: 1.5rem;
+}
+
+@media (min-width: 1024px) {
+    .ilseTop {
+        grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+        gap: 3rem;
+    }
+}
+
+.ilseSection {
+    margin: 1rem 0 0.5rem;
+}
+
+.ilseReportLine {
+    display: block;
+    margin-bottom: 0.625rem;
+    font-size: 1rem;
+    line-height: 1.5;
+}
+
+.ilseCaveat {
+    display: block;
+    margin-top: 0.5rem;
+    font-style: italic;
+}
+
+.ilseMuted {
+    color: var(--sapContent_LabelColor);
+}
+
+.ilseStrong {
+    font-family: var(--sapFontBoldFamily);
+}
+
+.ilseFilter {
+    margin: 0.75rem 0;
+}
+
+.ilseTimelineRow {
+    display: flex;
+    gap: 1rem;
+    padding: 0.5rem 0;
+}
+
+.ilseTime {
+    flex: 0 0 3.5rem;
+    font-family: var(--sapFontBoldFamily);
+}
+
+.ilseTimelineBody {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+}
+
+.ilseWho {
+    gap: 0.375rem;
+}
+
+.ilseReasons {
+    color: var(--sapCriticalTextColor);
+}
+
+.ilseMarked {
+    display: block;
+    margin-bottom: 0.25rem;
+}
+
+/* ---------- What we found: headline, board, facts ---------- */
+
+.ilseHeadline {
+    display: block;
+    margin: 0.25rem 0 0.75rem;
+    font-family: var(--sapFontBoldFamily);
+    font-size: 1.25rem;
+    line-height: 1.35;
+}
+
+.ilseBoard svg {
+    display: block;
+    width: 100%;
+    max-width: 40rem;
+    height: auto;
+}
+
+.ilseFacts {
+    gap: 1.25rem;
+    margin: 0.75rem 0 0.25rem;
+}
+
+/* The strings of the board: dashed, like thread on a pin board. */
+.boardString {
+    stroke: var(--sapNegativeColor);
+    stroke-width: 2;
+    stroke-dasharray: 6 5;
+    fill: none;
+}
+
+.boardCenter {
+    fill: var(--sapBackgroundColor);
+    stroke: var(--sapNegativeColor);
+    stroke-width: 3;
+}
+
+.boardWho {
+    fill: var(--sapNegativeTextColor);
+    font-family: var(--sapFontBoldFamily);
+    font-size: 17px;
+}
+
+.boardWhen {
+    fill: var(--sapTextColor);
+    font-family: var(--sapFontFamily);
+    font-size: 12px;
+}
+
+.boardCard {
+    fill: var(--sapTile_Background);
+    stroke: var(--sapList_BorderColor);
+    stroke-width: 1.5;
+}
+
+.boardTitle {
+    fill: var(--sapTextColor);
+    font-family: var(--sapFontBoldFamily);
+    font-size: 12.5px;
+}
+
+.boardValue {
+    fill: var(--sapContent_LabelColor);
+    font-family: var(--sapFontFamily);
+    font-size: 11.5px;
+}
+
+.boardChips {
+    fill: var(--sapNegativeTextColor);
+    font-family: var(--sapFontBoldFamily);
+    font-size: 11.5px;
+}
+
+/* ---------- Night clock ---------- */
+
+.ilseClockSvg svg {
+    display: block;
+    width: 100%;
+    max-width: 44rem;
+    height: auto;
+    margin-top: 0.5rem;
+}
+
+.clockNight {
+    fill: var(--sapContent_LabelColor);
+    fill-opacity: 0.18;
+}
+
+.clockNightLabel,
+.clockHour {
+    fill: var(--sapContent_LabelColor);
+    font-family: var(--sapFontFamily);
+    font-size: 11px;
+}
+
+.clockRow {
+    stroke: var(--sapList_BorderColor);
+    stroke-width: 1;
+}
+
+.clockDay {
+    fill: var(--sapContent_LabelColor);
+    font-family: var(--sapFontFamily);
+    font-size: 12px;
+}
+
+.clockDay--suspicious {
+    fill: var(--sapNegativeTextColor);
+    font-family: var(--sapFontBoldFamily);
+}
+
+.clockDot {
+    fill: var(--sapContent_LabelColor);
+}
+
+.clockDot--suspicious {
+    fill: var(--sapNegativeColor);
+    stroke: var(--sapBackgroundColor);
+    stroke-width: 2;
+}

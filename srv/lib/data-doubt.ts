@@ -6,7 +6,7 @@
  */
 
 /** One of Ilse's signs. */
-export type DoubtSign = 'meterTooHigh' | 'changedBySystem' | 'changedAtNight' | 'futureDate';
+export type DoubtSign = 'meterTooHigh' | 'changedBySystem' | 'changedAtNight' | 'futureDate' | 'markedByIlse';
 
 /** Who changed a record, and when (the `managed` fields). */
 export interface RecordStamp {
