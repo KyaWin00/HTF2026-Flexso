@@ -95,5 +95,40 @@ service CouncilService @(path: 'council', impl: 'srv/council-service') {
         cumulative   : Integer;    // proposal total up to this line
         remaining    : Integer;    // budget left after this line
         doubtReasons : String;     // Ilse's signs, comma-separated
+        emptyDate    : Date;       // food: the day it runs out without an emergency delivery
+  }
+
+  /**
+   * Rowan: "vóór het voorstel wil ik op één blad zien hoe het met Oakhaven gaat, water en eten samen
+   * per deel van het dorp, met de grootste problemen bovenaan." Computed on every read
+   * (srv/lib/village-overview.ts), already sorted worst first. Plain Strings (no named enum types),
+   * so UI5 can format them directly.
+   */
+  @cds.persistence.skip
+  @readonly
+  entity VillageOverview {
+    key area         : String;
+        gridCell     : String;     // cell on the village map, A1…H8
+        households   : Integer;
+        waterLevel   : String;     // alarm | attention | ok (Maren)
+        waterCause   : String;     // the pipe behind it
+        foodLevel    : String;     // hunger | tight | ok (Tobin: paniek | zenuwachtig | goed)
+        foodCause    : String;     // products behind it
+        foodCheck    : String;     // products whose number cannot be trusted (Ilse)
+        doubtReasons : String;     // Ilse's signs, comma-separated
+        severity     : Integer;    // 0 red, 1 orange, 2 fine
+        sortOrder    : Integer;
+  }
+
+  /**
+   * The pipes on the council's village map: route (grid units, flow direction) and Maren's level.
+   * Computed on read (no table), like VillageOverview.
+   */
+  @cds.persistence.skip
+  @readonly
+  entity MapPipes {
+    key pipeID     : String;
+        mapPath    : String;     // "x,y x,y …" in grid units from the south-west corner of A1
+        waterLevel : String;     // alarm | attention | ok
   }
 }

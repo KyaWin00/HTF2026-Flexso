@@ -1,4 +1,5 @@
 import formatMessage from "sap/base/strings/formatMessage";
+import DateFormat from "sap/ui/core/format/DateFormat";
 
 /**
  * Formatters for the council overview. Texts are passed in from i18n (see the `parts` in Main.view.xml),
@@ -54,6 +55,26 @@ function doubtText(
   return list.length === 0 ? trusted : list.map((code) => texts[code] ?? code).join(" · ");
 }
 
+/** Tobin's food level → semantic state: hunger (panic) red, tight (nervous) orange, ok green. */
+function foodState(level: string | null): string {
+  if (level === "hunger") return "Error";
+  if (level === "tight") return "Warning";
+  if (level === "ok") return "Success";
+  return "None";
+}
+
+function foodIcon(level: string | null): string {
+  if (level === "hunger") return "sap-icon://ti/alert-octagon";
+  if (level === "tight") return "sap-icon://ti/alert-triangle";
+  return "sap-icon://ti/circle-check";
+}
+
+function foodText(level: string | null, hunger: string, tight: string, ok: string): string {
+  if (level === "hunger") return hunger;
+  if (level === "tight") return tight;
+  return level === "ok" ? ok : "";
+}
+
 /**
  * Why a proposal line is (not) in the proposal. Proposed lines explain their need; the others
  * explain why the money does not go there. Texts from i18n, in the order of the parameters.
@@ -102,6 +123,34 @@ function proposalState(status: string | null): string {
   return "None";
 }
 
+/**
+ * What happens if the council does nothing (only for proposed lines): water stays off, or the
+ * product runs out on a given day (Tobin's week ahead, market day included).
+ */
+function withoutText(
+  kind: string | null,
+  need: string | null,
+  areas: string | null,
+  title: string | null,
+  emptyDate: string | null,
+  noWater: string,
+  waterRisk: string,
+  foodDate: string,
+  food: string,
+): string {
+  if (kind === "water") {
+    if (need === "noWaterNow") return formatMessage(noWater, [areas ?? ""]);
+    if (need === "waterRisk") return formatMessage(waterRisk, [areas ?? ""]);
+    return "";
+  }
+  const name = (title ?? "").toLocaleLowerCase();
+  if (emptyDate) {
+    const date = DateFormat.getDateInstance({ pattern: "EEEE d MMMM" }).format(new Date(emptyDate + "T00:00:00"));
+    return formatMessage(foodDate, [name, date]);
+  }
+  return formatMessage(food, [name]);
+}
+
 function proposalIcon(status: string | null): string {
   if (status === "proposed") return "sap-icon://ti/circle-check";
   if (status === "overBudget") return "sap-icon://ti/coins";
@@ -116,7 +165,11 @@ export default {
   doubtState,
   doubtIcon,
   doubtText,
+  foodState,
+  foodIcon,
+  foodText,
   reasonText,
+  withoutText,
   proposalDoubt,
   proposalState,
   proposalIcon,
