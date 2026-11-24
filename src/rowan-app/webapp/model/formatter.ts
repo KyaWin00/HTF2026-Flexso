@@ -1,3 +1,5 @@
+import formatMessage from "sap/base/strings/formatMessage";
+
 /**
  * Formatters for the council overview. Texts are passed in from i18n (see the `parts` in Main.view.xml),
  * so this module stays free of UI state.
@@ -52,4 +54,70 @@ function doubtText(
   return list.length === 0 ? trusted : list.map((code) => texts[code] ?? code).join(" · ");
 }
 
-export default { levelState, levelIcon, levelText, doubtState, doubtIcon, doubtText };
+/**
+ * Why a proposal line is (not) in the proposal. Proposed lines explain their need; the others
+ * explain why the money does not go there. Texts from i18n, in the order of the parameters.
+ */
+function reasonText(
+  need: string | null,
+  status: string | null,
+  areas: string | null,
+  noWaterNow: string,
+  waterRisk: string,
+  hunger: string,
+  overBudget: string,
+  checkFirst: string,
+  noRule: string,
+  orderInTime: string,
+  nobody: string,
+): string {
+  if (status === "proposed") {
+    if (need === "noWaterNow") return formatMessage(noWaterNow, [areas ?? ""]);
+    if (need === "waterRisk") return formatMessage(waterRisk, [areas ?? ""]);
+    if (need === "orderTooLate") return hunger;
+    return "";
+  }
+  const byStatus: Record<string, string> = { overBudget, checkFirst, noRule, orderInTime, nobodyAffected: nobody };
+  return byStatus[status ?? ""] ?? "";
+}
+
+/** "Let op, Ilse ziet …: <signs>" — on a line that is proposed anyway (its own numbers hold up). */
+function proposalDoubt(
+  reasons: string | null,
+  template: string,
+  negative: string,
+  futureDate: string,
+  impossibleFlow: string,
+  system: string,
+  night: string,
+): string {
+  return formatMessage(template, [doubtText(reasons, "", negative, futureDate, impossibleFlow, system, night)]);
+}
+
+/** Proposed → Success, money ran out → Error, check first → Warning, the rest is information. */
+function proposalState(status: string | null): string {
+  if (status === "proposed") return "Success";
+  if (status === "overBudget") return "Error";
+  if (status === "checkFirst") return "Warning";
+  return "None";
+}
+
+function proposalIcon(status: string | null): string {
+  if (status === "proposed") return "sap-icon://ti/circle-check";
+  if (status === "overBudget") return "sap-icon://ti/coins";
+  if (status === "checkFirst") return "sap-icon://ti/question-mark";
+  return "sap-icon://ti/minus";
+}
+
+export default {
+  levelState,
+  levelIcon,
+  levelText,
+  doubtState,
+  doubtIcon,
+  doubtText,
+  reasonText,
+  proposalDoubt,
+  proposalState,
+  proposalIcon,
+};
