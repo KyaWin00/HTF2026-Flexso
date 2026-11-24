@@ -54,6 +54,26 @@ function doubtText(
   return list.length === 0 ? trusted : list.map((code) => texts[code] ?? code).join(" · ");
 }
 
+/** Tobin's food level → semantic state: hunger (panic) red, tight (nervous) orange, ok green. */
+function foodState(level: string | null): string {
+  if (level === "hunger") return "Error";
+  if (level === "tight") return "Warning";
+  if (level === "ok") return "Success";
+  return "None";
+}
+
+function foodIcon(level: string | null): string {
+  if (level === "hunger") return "sap-icon://ti/alert-octagon";
+  if (level === "tight") return "sap-icon://ti/alert-triangle";
+  return "sap-icon://ti/circle-check";
+}
+
+function foodText(level: string | null, hunger: string, tight: string, ok: string): string {
+  if (level === "hunger") return hunger;
+  if (level === "tight") return tight;
+  return level === "ok" ? ok : "";
+}
+
 /**
  * Why a proposal line is (not) in the proposal. Proposed lines explain their need; the others
  * explain why the money does not go there. Texts from i18n, in the order of the parameters.
@@ -116,6 +136,9 @@ export default {
   doubtState,
   doubtIcon,
   doubtText,
+  foodState,
+  foodIcon,
+  foodText,
   reasonText,
   proposalDoubt,
   proposalState,

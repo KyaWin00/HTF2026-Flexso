@@ -1,48 +1,99 @@
 import Log from "sap/base/Log";
 import MessageBox from "sap/m/MessageBox";
-import Table from "sap/m/Table";
 import type List from "sap/m/List";
 import Controller from "sap/ui/core/mvc/Controller";
+import DateFormat from "sap/ui/core/format/DateFormat";
 import JSONModel from "sap/ui/model/json/JSONModel";
 import ODataModel from "sap/ui/model/odata/v4/ODataModel";
 import type ODataListBinding from "sap/ui/model/odata/v4/ODataListBinding";
+import type ResourceBundle from "sap/base/i18n/ResourceBundle";
+import type ResourceModel from "sap/ui/model/resource/ResourceModel";
+import Formatter from "../model/formatter";
 
-/** View state: the council's budget, the proposal's total, and what the ticked rows would cost. */
-interface BudgetState {
+/** View state: the budget and the totals of the proposal. */
+interface PageState {
   budget: number;
-  chosen: number;
-  remaining: number;
-  /** How many chosen rows rest on a number that may not be true (one of Ilse's signs). */
-  doubtfulChosen: number;
-  /** What the proposal spends, and what it leaves of the budget. */
   proposalSpent: number;
   proposalLeft: number;
+  notProposedCount: number;
+  /** Products whose number cannot be trusted — the same pantry for every area, shown once. */
+  foodCheck: string;
 }
 
-/** The fields of a ProposalLines row the controller needs. */
+/** A VillageOverview row (CouncilService). */
+interface OverviewRow {
+  area?: string;
+  households?: number | null;
+  waterLevel?: string;
+  waterCause?: string;
+  foodLevel?: string;
+  foodCause?: string;
+  foodCheck?: string;
+}
+
+/** A ProposalLines row (CouncilService). */
 interface ProposalRow {
-  kind?: string;
-  ref?: string;
+  position?: number | null;
   title?: string;
+  areas?: string;
+  households?: number | null;
+  need?: string | null;
   status?: string;
   cost?: number | string;
+  doubtReasons?: string;
 }
 
+/** The slice of the browser window the print sheet uses (the project's tsconfig has no DOM types). */
+interface PrintWindow {
+  readonly document: { open(): void; write(markup: string): void; close(): void };
+  focus(): void;
+  print(): void;
+}
+interface BrowserWindow {
+  open(url: string, target: string): PrintWindow | null;
+}
+
+/** Escapes text for the print sheet (data comes from the server, never trusted as HTML). */
+function html(text: unknown): string {
+  return String(text ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/** Calm black-and-white layout for paper: page 1 the overview, page 2 the proposal. */
+const PRINT_STYLE = `
+  body { font-family: Arial, Helvetica, sans-serif; color: #000; margin: 2cm; font-size: 12pt; }
+  h1 { font-size: 22pt; text-transform: uppercase; letter-spacing: .03em; margin: 0 0 .2cm; }
+  .meta { color: #444; margin-bottom: .6cm; }
+  table { width: 100%; border-collapse: collapse; margin-top: .3cm; }
+  th, td { text-align: left; vertical-align: top; padding: .25cm .2cm; border-bottom: 1px solid #999; }
+  th { font-size: 10pt; text-transform: uppercase; color: #444; }
+  .big { font-size: 14pt; font-weight: bold; }
+  .red { font-weight: bold; }
+  .muted { color: #444; font-size: 10pt; }
+  .warn { margin-top: .1cm; font-size: 10pt; }
+  .num { text-align: right; white-space: nowrap; }
+  .box { display: inline-block; width: .4cm; height: .4cm; border: 1px solid #000; margin: 0 .1cm 0 .3cm; vertical-align: middle; }
+  .page { page-break-after: always; }
+`;
+
 /**
- * Rowan's Monday overview: on top the proposal ("als u onze 500 kronen had, gaat het hierheen, en
- * waarom"), below the tables to tick what the council really wants to pay for — the council decides.
+ * Rowan's Monday: first how Oakhaven is doing (water and food per area, worst first), then the
+ * proposal for the 500 kronen with one line of why. They read it together, on paper — hence the
+ * print sheet. The raw tables are folded away under "Alle cijfers".
  *
  * @namespace oakhaven.rowan.controller
  */
 export default class Main extends Controller {
   private readonly state = new JSONModel({
     budget: 0,
-    chosen: 0,
-    remaining: 0,
-    doubtfulChosen: 0,
     proposalSpent: 0,
     proposalLeft: 0,
-  } satisfies BudgetState);
+    notProposedCount: 0,
+    foodCheck: "",
+  } satisfies PageState);
 
   public onInit(): void {
     this.getView()?.setModel(this.state, "view");
@@ -58,7 +109,6 @@ export default class Main extends Controller {
       await call.invoke();
       const result = call.getBoundContext().getObject() as { value?: number } | undefined;
       this.state.setProperty("/budget", result?.value ?? 0);
-      this.recalculate();
       this.onProposalUpdated();
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
@@ -67,66 +117,125 @@ export default class Main extends Controller {
     }
   }
 
-  /** The proposal has (re)loaded: show what it spends and what is left. */
+  /** The overview has loaded: the pantry's untrusted products are shown once, below the areas. */
+  public onOverviewUpdated(): void {
+    const rows = this.rowsOf<OverviewRow>("overviewList");
+    this.state.setProperty("/foodCheck", rows.find((row) => row.foodCheck)?.foodCheck ?? "");
+  }
+
+  /** The proposal has loaded: what it spends, what is left, how many lines are left out. */
   public onProposalUpdated(): void {
-    const spent = this.proposalRows()
-      .filter((row) => row.status === "proposed")
-      .reduce((sum, row) => sum + (Number(row.cost) || 0), 0);
+    const rows = this.rowsOf<ProposalRow>("proposalList");
+    const proposed = rows.filter((row) => row.status === "proposed");
+    const spent = proposed.reduce((sum, row) => sum + (Number(row.cost) || 0), 0);
     const budget = Number(this.state.getProperty("/budget")) || 0;
     this.state.setProperty("/proposalSpent", spent);
     this.state.setProperty("/proposalLeft", budget - spent);
+    this.state.setProperty("/notProposedCount", rows.length - proposed.length);
   }
 
   /**
-   * Ticks exactly the proposed lines in the pipes and food tables, so the budget box shows the
-   * proposal. Rowan: "Wij beslissen uiteindelijk zelf" — the council can untick or add rows after.
+   * Rowan: "we lezen het samen rond de tafel in Shepherd's Inn, en het liefst op papier".
+   * Opens a plain two-page sheet and the browser's print dialog: page 1 how Oakhaven is doing,
+   * page 2 the proposal, with a box per line for the council's own yes/no.
    */
-  public onTakeProposal(): void {
-    const proposed = this.proposalRows().filter((row) => row.status === "proposed");
-    // Compare on a property each table binds (UI5 only loads the bound ones): the pipe table shows
-    // pipeID (= the line's ref), the food table shows the product name (= the line's title).
-    const pick = (kind: string, field: "ref" | "title"): Set<string> =>
-      new Set(proposed.filter((row) => row.kind === kind).map((row) => row[field] ?? ""));
-    this.selectRows("pipesTable", "pipeID", pick("water", "ref"));
-    this.selectRows("foodTable", "name", pick("food", "title"));
-    this.recalculate();
-  }
+  public async onPrint(): Promise<void> {
+    const bundle = await this.getBundle();
+    const t = (key: string, args?: unknown[]): string => bundle.getText(key, args as string[]) ?? key;
+    const overview = this.rowsOf<OverviewRow>("overviewList");
+    const lines = this.rowsOf<ProposalRow>("proposalList");
+    const state = this.state.getData() as PageState;
+    const date = DateFormat.getDateInstance({ pattern: "d MMMM yyyy" }).format(new Date());
+    const doubtTexts = [t("doubtNegative"), t("doubtFutureDate"), t("doubtImpossibleFlow"), t("doubtSystem"), t("doubtNight")] as const;
+    const reason = (row: ProposalRow): string =>
+      Formatter.reasonText(
+        row.need ?? null,
+        row.status ?? null,
+        row.areas ?? null,
+        t("reasonNoWaterNow"),
+        t("reasonWaterRisk"),
+        t("reasonHunger"),
+        t("reasonOverBudget"),
+        t("reasonCheckFirst"),
+        t("reasonNoRule"),
+        t("reasonOrderInTime"),
+        t("reasonNobody"),
+      );
 
-  /** A row was (un)ticked in the pipes or food table. */
-  public onSelectionChange(): void {
-    this.recalculate();
-  }
+    const areaRows = overview
+      .map((row) => {
+        const water = Formatter.levelText(row.waterLevel ?? null, t("levelAlarm"), t("levelAttention"), t("levelOk"));
+        const food = Formatter.foodText(row.foodLevel ?? null, t("foodHunger"), t("foodTight"), t("foodOk"));
+        const households = row.households ? `<div class="muted">${html(t("proposalHouseholds", [row.households]))}</div>` : "";
+        return `<tr>
+          <td><span class="big">${html(row.area)}</span>${households}</td>
+          <td class="${row.waterLevel === "ok" ? "" : "red"}">${html(water)}${row.waterCause ? `<div class="muted">${html(t("waterBy", [row.waterCause]))}</div>` : ""}</td>
+          <td class="${row.foodLevel === "ok" ? "" : "red"}">${html(food)}${row.foodCause ? `<div class="muted">${html(row.foodCause)}</div>` : ""}</td>
+        </tr>`;
+      })
+      .join("");
 
-  private selectRows(tableId: string, keyProperty: string, keys: Set<string>): void {
-    const table = this.byId(tableId) as Table | undefined;
-    if (!table) return;
-    table.removeSelections(true);
-    for (const item of table.getItems()) {
-      const key = item.getBindingContext()?.getProperty(keyProperty) as string | undefined;
-      if (key !== undefined && keys.has(key)) table.setSelectedItem(item as never, true);
+    const proposedRows = lines
+      .filter((row) => row.status === "proposed")
+      .map((row) => {
+        const doubt = row.doubtReasons
+          ? `<div class="warn">⚠ ${html(Formatter.proposalDoubt(row.doubtReasons, t("proposalDoubt"), ...doubtTexts))}</div>`
+          : "";
+        return `<tr>
+          <td class="big">${html(row.position)}</td>
+          <td><span class="big">${html(row.title)}</span><div>${html(reason(row))}</div>${doubt}</td>
+          <td class="num">${html(row.cost)} ${html(t("unitKronen"))}</td>
+          <td class="num">${html(t("printYes"))}<span class="box"></span>${html(t("printNo"))}<span class="box"></span></td>
+        </tr>`;
+      })
+      .join("");
+
+    const leftOut = lines
+      .filter((row) => row.status !== "proposed")
+      .map((row) => `<li><b>${html(row.title)}</b>: ${html(reason(row))}</li>`)
+      .join("");
+
+    const sheet = `<!DOCTYPE html><html lang="nl"><head><meta charset="utf-8"><title>${html(t("appTitle"))}</title>
+      <style>${PRINT_STYLE}</style></head><body>
+      <div class="page">
+        <div class="meta">${html(t("printDate", [date]))}</div>
+        <h1>${html(t("overviewTitle"))}</h1>
+        <div class="muted">${html(t("overviewIntro"))}</div>
+        <table><tr><th>${html(t("colArea"))}</th><th>${html(t("labelWater"))}</th><th>${html(t("labelFood"))}</th></tr>${areaRows}</table>
+        ${state.foodCheck ? `<p class="warn">⚠ ${html(t("foodCheck", [state.foodCheck]))}</p>` : ""}
+      </div>
+      <div>
+        <div class="meta">${html(t("printDate", [date]))}</div>
+        <h1>${html(t("printPage2"))}</h1>
+        <p class="big">${html(t("proposalSummary", [state.proposalSpent, state.budget, state.proposalLeft]))}</p>
+        <p class="muted">${html(t("proposalOrder"))}</p>
+        <table><tr><th>#</th><th></th><th class="num">${html(t("colCost"))}</th><th class="num">${html(t("printDecided"))}</th></tr>${proposedRows}</table>
+        ${leftOut ? `<p class="muted">${html(t("notProposedTitle", [state.notProposedCount]))}</p><ul class="muted">${leftOut}</ul>` : ""}
+        <p class="muted">${html(t("advice"))}</p>
+      </div>
+      </body></html>`;
+
+    const browser = globalThis as unknown as BrowserWindow;
+    const printWindow = browser.open("", "_blank");
+    if (!printWindow) {
+      MessageBox.error(t("print"));
+      return;
     }
+    printWindow.document.open();
+    printWindow.document.write(sheet);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
   }
 
-  private proposalRows(): ProposalRow[] {
-    const list = this.byId("proposalList") as List | undefined;
+  private rowsOf<T>(listId: string): T[] {
+    const list = this.byId(listId) as List | undefined;
     const binding = list?.getBinding("items") as ODataListBinding | undefined;
-    return binding ? binding.getCurrentContexts().map((context) => context.getObject() as ProposalRow) : [];
+    return binding ? binding.getCurrentContexts().map((context) => context.getObject() as T) : [];
   }
 
-  private recalculate(): void {
-    const contexts = ["pipesTable", "foodTable"].flatMap((id) => {
-      const table = this.byId(id) as Table | undefined;
-      return table ? table.getSelectedContexts() : [];
-    });
-    let chosen = 0;
-    let doubtfulChosen = 0;
-    for (const context of contexts) {
-      chosen += Number(context.getProperty("cost")) || 0;
-      if (context.getProperty("doubtful") === true) doubtfulChosen += 1;
-    }
-    const budget = Number(this.state.getProperty("/budget")) || 0;
-    this.state.setProperty("/chosen", chosen);
-    this.state.setProperty("/remaining", budget - chosen);
-    this.state.setProperty("/doubtfulChosen", doubtfulChosen);
+  private async getBundle(): Promise<ResourceBundle> {
+    const i18n = this.getOwnerComponent()?.getModel("i18n") as ResourceModel;
+    return await i18n.getResourceBundle();
   }
 }

@@ -7,7 +7,9 @@
     core:require="{ Formatter: 'oakhaven/rowan/model/formatter', formatMessage: 'sap/base/strings/formatMessage' }"
     displayBlock="true"
     height="100%">
-    <f:DynamicPage id="page" toggleHeaderOnTitleClick="true" backgroundDesign="Transparent" class="rowanApp">
+    <!-- Rowan reads this on paper, together at the table in Shepherd's Inn: first how Oakhaven is
+         doing (one sheet), then the proposal. Everything else is folded away under "Alle cijfers". -->
+    <f:DynamicPage id="page" backgroundDesign="Transparent" class="rowanApp">
         <f:title>
             <f:DynamicPageTitle id="pageTitle">
                 <f:heading>
@@ -19,225 +21,203 @@
                 <f:expandedContent>
                     <Label id="pageSubtitle" text="{i18n>pageSubtitle}" />
                 </f:expandedContent>
-                <f:snappedContent>
-                    <ObjectStatus id="remainingSnapped"
-                        text="{ parts: ['i18n>remainingSnapped', 'view>/remaining'], formatter: 'formatMessage' }"
-                        state="{= ${view>/remaining} &lt; 0 ? 'Error' : 'None' }"
-                        icon="{= ${view>/remaining} &lt; 0 ? 'sap-icon://ti/alert-octagon' : 'sap-icon://ti/coins' }" />
-                </f:snappedContent>
+                <f:actions>
+                    <Button id="printButton" text="{i18n>print}" tooltip="{i18n>printTooltip}" icon="sap-icon://ti/printer"
+                        type="Emphasized" press=".onPrint" />
+                </f:actions>
             </f:DynamicPageTitle>
         </f:title>
 
-        <!-- Rowan: 500 kronen per week; a repair ±120, an emergency delivery ±80 extra. -->
-        <f:header>
-            <f:DynamicPageHeader id="pageHeader">
-                <VBox id="budgetBox">
-                    <FlexBox id="budgetNumbers" wrap="Wrap" alignItems="End">
-                        <VBox id="budgetTotalBox" class="sapUiMediumMarginEnd sapUiSmallMarginBottom">
-                            <Label id="budgetTotalLabel" text="{i18n>budgetTotal}" />
-                            <ObjectNumber id="budgetTotal" number="{view>/budget}" unit="{i18n>unitKronen}" />
-                        </VBox>
-                        <VBox id="budgetChosenBox" class="sapUiMediumMarginEnd sapUiSmallMarginBottom">
-                            <Label id="budgetChosenLabel" text="{i18n>budgetChosen}" />
-                            <ObjectNumber id="budgetChosen" number="{view>/chosen}" unit="{i18n>unitKronen}" />
-                        </VBox>
-                        <VBox id="budgetRemainingBox" class="sapUiSmallMarginBottom">
-                            <Label id="budgetRemainingLabel" text="{i18n>budgetRemaining}" />
-                            <ObjectNumber id="budgetRemaining" number="{view>/remaining}" unit="{i18n>unitKronen}"
-                                state="{= ${view>/remaining} &lt; 0 ? 'Error' : 'Success' }" />
-                        </VBox>
-                    </FlexBox>
-                    <Text id="budgetHint" text="{i18n>budgetHint}" />
-                    <MessageStrip id="overBudgetStrip" type="Error" showIcon="true" class="sapUiSmallMarginTop"
-                        visible="{= ${view>/remaining} &lt; 0 }"
-                        text="{ parts: ['i18n>overBudget', 'view>/remaining'], formatter: 'formatMessage' }" />
-                    <MessageStrip id="doubtStrip" type="Warning" showIcon="true" class="sapUiSmallMarginTop"
-                        visible="{= ${view>/doubtfulChosen} > 0 }"
-                        text="{ parts: ['i18n>doubtfulChosen', 'view>/doubtfulChosen'], formatter: 'formatMessage' }" />
-                </VBox>
-            </f:DynamicPageHeader>
-        </f:header>
-
         <f:content>
-            <VBox id="content">
-                <!-- ============ 0. The proposal: "als u onze 500 kronen had, gaat het hierheen, en waarom" ============
-                     Computed on the server (CouncilService.ProposalLines), already in order. -->
+            <VBox id="content" class="rowanPage">
+
+                <!-- ============ 1. Hoe staat Oakhaven ervoor — water and food per area, worst first ============ -->
+                <VBox id="overviewBox" class="rowanTile sapUiMediumMarginBottom">
+                    <Title id="overviewTitle" text="{i18n>overviewTitle}" level="H2" class="rowanHeadline" />
+                    <Text id="overviewIntro" text="{i18n>overviewIntro}" class="rowanMuted sapUiSmallMarginBottom" />
+                    <List id="overviewList" noDataText="{i18n>noData}" showSeparators="Inner" backgroundDesign="Transparent"
+                        updateFinished=".onOverviewUpdated"
+                        items="{ path: '/VillageOverview', templateShareable: false }">
+                        <CustomListItem id="overviewItem">
+                            <FlexBox id="overviewRow" wrap="Wrap" alignItems="Start" class="rowanAreaRow">
+                                <VBox id="overviewAreaBox" class="rowanAreaName">
+                                    <Title id="overviewArea" text="{area}" level="H3" class="rowanLineTitle" />
+                                    <Text id="overviewHouseholds" class="rowanMuted"
+                                        visible="{= %{households} !== null }"
+                                        text="{ parts: ['i18n>proposalHouseholds', { path: 'households', targetType: 'any' }], formatter: 'formatMessage' }" />
+                                </VBox>
+                                <VBox id="overviewWaterBox" class="rowanCell">
+                                    <Label id="overviewWaterLabel" text="{i18n>labelWater}" />
+                                    <ObjectStatus id="overviewWater" inverted="true"
+                                        state="{ path: 'waterLevel', formatter: 'Formatter.levelState' }"
+                                        icon="{ path: 'waterLevel', formatter: 'Formatter.levelIcon' }"
+                                        text="{ parts: ['waterLevel', 'i18n>levelAlarm', 'i18n>levelAttention', 'i18n>levelOk'], formatter: 'Formatter.levelText' }" />
+                                    <Text id="overviewWaterCause" class="rowanMuted" visible="{= !!%{waterCause} }"
+                                        text="{ parts: ['i18n>waterBy', 'waterCause'], formatter: 'formatMessage' }" />
+                                </VBox>
+                                <VBox id="overviewFoodBox" class="rowanCell">
+                                    <Label id="overviewFoodLabel" text="{i18n>labelFood}" />
+                                    <ObjectStatus id="overviewFood" inverted="true"
+                                        state="{ path: 'foodLevel', formatter: 'Formatter.foodState' }"
+                                        icon="{ path: 'foodLevel', formatter: 'Formatter.foodIcon' }"
+                                        text="{ parts: ['foodLevel', 'i18n>foodHunger', 'i18n>foodTight', 'i18n>foodOk'], formatter: 'Formatter.foodText' }" />
+                                    <Text id="overviewFoodCause" class="rowanMuted" visible="{= !!%{foodCause} }" text="{foodCause}" />
+                                </VBox>
+                            </FlexBox>
+                        </CustomListItem>
+                    </List>
+                    <!-- The same pantry for everyone: one line, not on every row -->
+                    <ObjectStatus id="overviewCheck" state="Warning" icon="sap-icon://ti/question-mark" class="sapUiSmallMarginTop"
+                        visible="{= !!${view>/foodCheck} }"
+                        text="{ parts: ['i18n>foodCheck', 'view>/foodCheck'], formatter: 'formatMessage' }" />
+                </VBox>
+
+                <!-- ============ 2. Ons voorstel — only what is in it, one line of why each ============ -->
                 <VBox id="proposalBox" class="rowanTile rowanProposal sapUiMediumMarginBottom">
-                    <FlexBox id="proposalHead" justifyContent="SpaceBetween" alignItems="Center" wrap="Wrap">
-                        <VBox id="proposalHeadText">
-                            <Title id="proposalTitle" text="{i18n>proposalTitle}" level="H2" class="rowanHeadline" />
-                            <Text id="proposalSummary" class="rowanSummary"
-                                text="{ parts: ['i18n>proposalSummary', 'view>/proposalSpent', 'view>/budget', 'view>/proposalLeft'], formatter: 'formatMessage' }" />
-                        </VBox>
-                        <Button id="takeProposal" text="{i18n>takeProposal}" tooltip="{i18n>takeProposalTooltip}"
-                            type="Emphasized" icon="sap-icon://ti/checks" press=".onTakeProposal" />
-                    </FlexBox>
+                    <Title id="proposalTitle" text="{i18n>proposalTitle}" level="H2" class="rowanHeadline" />
+                    <Text id="proposalSummary" class="rowanSummary"
+                        text="{ parts: ['i18n>proposalSummary', 'view>/proposalSpent', 'view>/budget', 'view>/proposalLeft'], formatter: 'formatMessage' }" />
+                    <Text id="proposalOrder" text="{i18n>proposalOrder}" class="rowanMuted sapUiTinyMarginTop sapUiSmallMarginBottom" />
                     <List id="proposalList" noDataText="{i18n>noData}" showSeparators="Inner" backgroundDesign="Transparent"
                         updateFinished=".onProposalUpdated"
                         items="{ path: '/ProposalLines', templateShareable: false }">
-                        <CustomListItem id="proposalItem">
+                        <CustomListItem id="proposalItem" visible="{= %{status} === 'proposed' }">
                             <HBox id="proposalRow" alignItems="Start" class="rowanProposalRow">
-                                <Text id="proposalPosition" class="rowanPosition"
-                                    text="{= %{position} === null ? '–' : %{position} }" />
+                                <Text id="proposalPosition" class="rowanPosition" text="{= %{position} }" />
                                 <VBox id="proposalMain" class="rowanProposalMain">
-                                    <FlexBox id="proposalLineHead" alignItems="Center" wrap="Wrap" class="rowanLineHead">
-                                        <Title id="proposalLineTitle" text="{title}" level="H3" class="rowanLineTitle" />
-                                        <ObjectStatus id="proposalStatus"
-                                            text="{= %{status} === 'proposed' ? ${i18n>inProposal} : ${i18n>notInProposal} }"
-                                            state="{ path: 'status', targetType: 'any', formatter: 'Formatter.proposalState' }"
-                                            icon="{ path: 'status', targetType: 'any', formatter: 'Formatter.proposalIcon' }" />
-                                    </FlexBox>
+                                    <Title id="proposalLineTitle" text="{title}" level="H3" class="rowanLineTitle" />
                                     <Text id="proposalReason" class="rowanReason"
                                         text="{ parts: [{ path: 'need', targetType: 'any' }, { path: 'status', targetType: 'any' }, { path: 'areas', targetType: 'any' }, 'i18n>reasonNoWaterNow', 'i18n>reasonWaterRisk', 'i18n>reasonHunger', 'i18n>reasonOverBudget', 'i18n>reasonCheckFirst', 'i18n>reasonNoRule', 'i18n>reasonOrderInTime', 'i18n>reasonNobody'], formatter: 'Formatter.reasonText' }" />
-                                    <Text id="proposalHouseholds" class="rowanMuted"
-                                        visible="{= %{households} !== null &amp;&amp; %{households} > 0 }"
-                                        text="{ parts: ['i18n>proposalHouseholds', { path: 'households', targetType: 'any' }], formatter: 'formatMessage' }" />
-                                    <!-- A proposed line whose own numbers hold up, but with something odd around it (Ilse) -->
-                                    <ObjectStatus id="proposalDoubt" state="Warning" icon="sap-icon://ti/question-mark"
-                                        visible="{= %{status} === 'proposed' &amp;&amp; !!%{doubtReasons} }"
+                                    <!-- Rowan: "dat zoiets duidelijk op ons blad staat, zodat we weten dat er iets niet klopt" -->
+                                    <ObjectStatus id="proposalDoubt" state="Warning" icon="sap-icon://ti/alert-triangle"
+                                        visible="{= !!%{doubtReasons} }"
                                         text="{ parts: [{ path: 'doubtReasons', targetType: 'any' }, 'i18n>proposalDoubt', 'i18n>doubtNegative', 'i18n>doubtFutureDate', 'i18n>doubtImpossibleFlow', 'i18n>doubtSystem', 'i18n>doubtNight'], formatter: 'Formatter.proposalDoubt' }" />
-                                    <ObjectStatus id="proposalCheckWhy" state="Warning"
-                                        visible="{= %{status} === 'checkFirst' }"
-                                        text="{ parts: [{ path: 'doubtReasons', targetType: 'any' }, 'i18n>trusted', 'i18n>doubtNegative', 'i18n>doubtFutureDate', 'i18n>doubtImpossibleFlow', 'i18n>doubtSystem', 'i18n>doubtNight'], formatter: 'Formatter.doubtText' }" />
                                 </VBox>
-                                <VBox id="proposalMoney" alignItems="End" class="rowanMoney">
-                                    <ObjectNumber id="proposalCost" number="{cost}" unit="{i18n>unitKronen}"
-                                        emphasized="{= %{status} === 'proposed' }"
-                                        state="{= %{status} === 'proposed' ? 'Success' : 'None' }" />
-                                    <Text id="proposalLeft" class="rowanMuted" visible="{= %{remaining} !== null }"
-                                        text="{ parts: ['i18n>leftAfter', { path: 'remaining', targetType: 'any' }], formatter: 'formatMessage' }" />
-                                </VBox>
+                                <ObjectNumber id="proposalCost" number="{cost}" unit="{i18n>unitKronen}" emphasized="true" class="rowanMoney" />
                             </HBox>
                         </CustomListItem>
                     </List>
+
+                    <!-- What is left out, and why — folded, it is not what the council decides on -->
+                    <Panel id="notProposedPanel" expandable="true" expanded="false" backgroundDesign="Transparent" class="sapUiSmallMarginTop"
+                        headerText="{ parts: ['i18n>notProposedTitle', 'view>/notProposedCount'], formatter: 'formatMessage' }">
+                        <List id="notProposedList" showSeparators="Inner" backgroundDesign="Transparent"
+                            items="{ path: '/ProposalLines', templateShareable: false }">
+                            <CustomListItem id="notProposedItem" visible="{= %{status} !== 'proposed' }">
+                                <HBox id="notProposedRow" alignItems="Baseline" class="rowanProposalRow">
+                                    <Text id="notProposedTitle" text="{title}" class="rowanNotTitle" />
+                                    <Text id="notProposedReason" class="rowanMuted"
+                                        text="{ parts: [{ path: 'need', targetType: 'any' }, { path: 'status', targetType: 'any' }, { path: 'areas', targetType: 'any' }, 'i18n>reasonNoWaterNow', 'i18n>reasonWaterRisk', 'i18n>reasonHunger', 'i18n>reasonOverBudget', 'i18n>reasonCheckFirst', 'i18n>reasonNoRule', 'i18n>reasonOrderInTime', 'i18n>reasonNobody'], formatter: 'Formatter.reasonText' }" />
+                                </HBox>
+                            </CustomListItem>
+                        </List>
+                    </Panel>
+                    <Text id="adviceNote" text="{i18n>advice}" class="rowanMuted sapUiSmallMarginTop" />
                 </VBox>
 
-                <MessageStrip id="notDecidedStrip" type="Information" showIcon="true" text="{i18n>notDecided}" class="sapUiSmallMarginBottom" />
+                <!-- ============ 3. Alle cijfers — the raw facts, folded away ============ -->
+                <Panel id="detailsPanel" expandable="true" expanded="false" headerText="{i18n>detailsTitle}" class="rowanDetails">
+                    <Table id="areasTable" noDataText="{i18n>noData}" class="sapUiMediumMarginBottom"
+                        items="{ path: '/Areas', templateShareable: false }">
+                        <headerToolbar>
+                            <OverflowToolbar id="areasToolbar"><Title id="areasTitle" text="{i18n>areasTitle}" level="H3" /></OverflowToolbar>
+                        </headerToolbar>
+                        <columns>
+                            <Column id="areaNameCol"><Text id="areaNameHdr" text="{i18n>colArea}" /></Column>
+                            <Column id="areaWaterCol"><Text id="areaWaterHdr" text="{i18n>colWater}" /></Column>
+                            <Column id="areaPipeCol" minScreenWidth="Tablet" demandPopin="true"><Text id="areaPipeHdr" text="{i18n>colCause}" /></Column>
+                            <Column id="areaHouseholdsCol" hAlign="End" minScreenWidth="Tablet" demandPopin="true"><Text id="areaHouseholdsHdr" text="{i18n>colHouseholds}" /></Column>
+                            <Column id="areaTrustCol"><Text id="areaTrustHdr" text="{i18n>colTrust}" /></Column>
+                        </columns>
+                        <items>
+                            <ColumnListItem id="areaRow">
+                                <cells>
+                                    <ObjectIdentifier id="areaName" title="{name}" text="{gridCell}" />
+                                    <ObjectStatus id="areaWater"
+                                        state="{ path: 'waterLevel', formatter: 'Formatter.levelState' }"
+                                        icon="{ path: 'waterLevel', formatter: 'Formatter.levelIcon' }"
+                                        text="{ parts: ['waterLevel', 'i18n>levelAlarm', 'i18n>levelAttention', 'i18n>levelOk'], formatter: 'Formatter.levelText' }" />
+                                    <Text id="areaPipe" text="{= ${worstPipe} || '–' }" />
+                                    <ObjectNumber id="areaHouseholds" number="{= ${households} === null ? '?' : ${households} }" unit="{i18n>unitHouseholds}" />
+                                    <ObjectStatus id="areaTrust"
+                                        state="{ path: 'doubtful', formatter: 'Formatter.doubtState' }"
+                                        icon="{ path: 'doubtful', formatter: 'Formatter.doubtIcon' }"
+                                        text="{ parts: ['doubtReasons', 'i18n>trusted', 'i18n>doubtNegative', 'i18n>doubtFutureDate', 'i18n>doubtImpossibleFlow', 'i18n>doubtSystem', 'i18n>doubtNight'], formatter: 'Formatter.doubtText' }" />
+                                </cells>
+                            </ColumnListItem>
+                        </items>
+                    </Table>
 
-                <!-- ============ 1. Where does it hurt? Parts of the village ============ -->
-                <Table id="areasTable" noDataText="{i18n>noData}" class="sapUiMediumMarginBottom"
-                    items="{ path: '/Areas', templateShareable: false }">
-                    <headerToolbar>
-                        <OverflowToolbar id="areasToolbar">
-                            <Title id="areasTitle" text="{i18n>areasTitle}" level="H2" />
-                        </OverflowToolbar>
-                    </headerToolbar>
-                    <infoToolbar>
-                        <OverflowToolbar id="areasInfo"><Label id="areasInfoText" text="{i18n>areasInfo}" wrapping="true" /></OverflowToolbar>
-                    </infoToolbar>
-                    <columns>
-                        <Column id="areaNameCol"><Text id="areaNameHdr" text="{i18n>colArea}" /></Column>
-                        <Column id="areaWaterCol"><Text id="areaWaterHdr" text="{i18n>colWater}" /></Column>
-                        <Column id="areaPipeCol" minScreenWidth="Tablet" demandPopin="true"><Text id="areaPipeHdr" text="{i18n>colCause}" /></Column>
-                        <Column id="areaHouseholdsCol" hAlign="End" minScreenWidth="Tablet" demandPopin="true"><Text id="areaHouseholdsHdr" text="{i18n>colHouseholds}" /></Column>
-                        <Column id="areaTrustCol"><Text id="areaTrustHdr" text="{i18n>colTrust}" /></Column>
-                    </columns>
-                    <items>
-                        <ColumnListItem id="areaRow">
-                            <cells>
-                                <ObjectIdentifier id="areaName" title="{name}" text="{gridCell}" />
-                                <ObjectStatus id="areaWater" inverted="true"
-                                    state="{ path: 'waterLevel', formatter: 'Formatter.levelState' }"
-                                    icon="{ path: 'waterLevel', formatter: 'Formatter.levelIcon' }"
-                                    text="{ parts: ['waterLevel', 'i18n>levelAlarm', 'i18n>levelAttention', 'i18n>levelOk'], formatter: 'Formatter.levelText' }" />
-                                <Text id="areaPipe" text="{= ${worstPipe} || '–' }" />
-                                <ObjectNumber id="areaHouseholds" number="{= ${households} === null ? '?' : ${households} }" unit="{i18n>unitHouseholds}" />
-                                <ObjectStatus id="areaTrust"
-                                    state="{ path: 'doubtful', formatter: 'Formatter.doubtState' }"
-                                    icon="{ path: 'doubtful', formatter: 'Formatter.doubtIcon' }"
-                                    text="{ parts: ['doubtReasons', 'i18n>trusted', 'i18n>doubtNegative', 'i18n>doubtFutureDate', 'i18n>doubtImpossibleFlow', 'i18n>doubtSystem', 'i18n>doubtNight'], formatter: 'Formatter.doubtText' }" />
-                            </cells>
-                        </ColumnListItem>
-                    </items>
-                </Table>
+                    <Table id="pipesTable" noDataText="{i18n>noData}" class="sapUiMediumMarginBottom"
+                        items="{ path: '/WaterPipes', templateShareable: false }">
+                        <headerToolbar>
+                            <OverflowToolbar id="pipesToolbar"><Title id="pipesTitle" text="{i18n>pipesTitle}" level="H3" /></OverflowToolbar>
+                        </headerToolbar>
+                        <columns>
+                            <Column id="pipeNameCol"><Text id="pipeNameHdr" text="{i18n>colPipe}" /></Column>
+                            <Column id="pipeWaterCol"><Text id="pipeWaterHdr" text="{i18n>colWater}" /></Column>
+                            <Column id="pipeOrderCol" hAlign="Center" minScreenWidth="Tablet" demandPopin="true"><Text id="pipeOrderHdr" text="{i18n>colMarenOrder}" /></Column>
+                            <Column id="pipeFlowCol" hAlign="End" minScreenWidth="Tablet" demandPopin="true"><Text id="pipeFlowHdr" text="{i18n>colFlow}" /></Column>
+                            <Column id="pipePressureCol" hAlign="End" minScreenWidth="Tablet" demandPopin="true"><Text id="pipePressureHdr" text="{i18n>colPressure}" /></Column>
+                            <Column id="pipeServedCol" minScreenWidth="Desktop" demandPopin="true"><Text id="pipeServedHdr" text="{i18n>colServed}" /></Column>
+                            <Column id="pipeTrustCol"><Text id="pipeTrustHdr" text="{i18n>colTrust}" /></Column>
+                        </columns>
+                        <items>
+                            <ColumnListItem id="pipeRow">
+                                <cells>
+                                    <ObjectIdentifier id="pipeName" title="{pipeID}" text="{location}" />
+                                    <ObjectStatus id="pipeWater"
+                                        state="{ path: 'waterLevel', formatter: 'Formatter.levelState' }"
+                                        icon="{ path: 'waterLevel', formatter: 'Formatter.levelIcon' }"
+                                        text="{ parts: ['waterLevel', 'i18n>levelAlarm', 'i18n>levelAttention', 'i18n>levelOk'], formatter: 'Formatter.levelText' }" />
+                                    <Text id="pipeOrder" text="{= ${marenOrder} === null ? '–' : ${marenOrder} }" />
+                                    <ObjectNumber id="pipeFlow" number="{flowPercent}" unit="{i18n>unitPercentOfNormal}" />
+                                    <ObjectNumber id="pipePressure" number="{currentPressure}" unit="{i18n>unitPressure}" />
+                                    <Text id="pipeServed" text="{= ${servedAreas} || ${i18n>nobody} }" />
+                                    <ObjectStatus id="pipeTrust"
+                                        state="{ path: 'doubtful', formatter: 'Formatter.doubtState' }"
+                                        icon="{ path: 'doubtful', formatter: 'Formatter.doubtIcon' }"
+                                        text="{ parts: ['doubtReasons', 'i18n>trusted', 'i18n>doubtNegative', 'i18n>doubtFutureDate', 'i18n>doubtImpossibleFlow', 'i18n>doubtSystem', 'i18n>doubtNight'], formatter: 'Formatter.doubtText' }" />
+                                </cells>
+                            </ColumnListItem>
+                        </items>
+                    </Table>
 
-                <!-- ============ 2. Pipes — repair ±120 kronen ============ -->
-                <Table id="pipesTable" mode="MultiSelect" noDataText="{i18n>noData}" class="sapUiMediumMarginBottom"
-                    selectionChange=".onSelectionChange"
-                    items="{ path: '/WaterPipes', templateShareable: false }">
-                    <headerToolbar>
-                        <OverflowToolbar id="pipesToolbar">
-                            <Title id="pipesTitle" text="{i18n>pipesTitle}" level="H2" />
-                        </OverflowToolbar>
-                    </headerToolbar>
-                    <infoToolbar>
-                        <OverflowToolbar id="pipesInfo"><Label id="pipesInfoText" text="{i18n>pipesInfo}" wrapping="true" /></OverflowToolbar>
-                    </infoToolbar>
-                    <columns>
-                        <Column id="pipeNameCol"><Text id="pipeNameHdr" text="{i18n>colPipe}" /></Column>
-                        <Column id="pipeWaterCol"><Text id="pipeWaterHdr" text="{i18n>colWater}" /></Column>
-                        <Column id="pipeOrderCol" hAlign="Center" minScreenWidth="Tablet" demandPopin="true"><Text id="pipeOrderHdr" text="{i18n>colMarenOrder}" /></Column>
-                        <Column id="pipeFlowCol" hAlign="End" minScreenWidth="Tablet" demandPopin="true"><Text id="pipeFlowHdr" text="{i18n>colFlow}" /></Column>
-                        <Column id="pipePressureCol" hAlign="End" minScreenWidth="Tablet" demandPopin="true"><Text id="pipePressureHdr" text="{i18n>colPressure}" /></Column>
-                        <Column id="pipeServedCol" minScreenWidth="Desktop" demandPopin="true"><Text id="pipeServedHdr" text="{i18n>colServed}" /></Column>
-                        <Column id="pipeTrustCol"><Text id="pipeTrustHdr" text="{i18n>colTrust}" /></Column>
-                        <Column id="pipeCostCol" hAlign="End"><Text id="pipeCostHdr" text="{i18n>colCost}" /></Column>
-                    </columns>
-                    <items>
-                        <ColumnListItem id="pipeRow">
-                            <cells>
-                                <ObjectIdentifier id="pipeName" title="{pipeID}" text="{location}" />
-                                <ObjectStatus id="pipeWater" inverted="true"
-                                    state="{ path: 'waterLevel', formatter: 'Formatter.levelState' }"
-                                    icon="{ path: 'waterLevel', formatter: 'Formatter.levelIcon' }"
-                                    text="{ parts: ['waterLevel', 'i18n>levelAlarm', 'i18n>levelAttention', 'i18n>levelOk'], formatter: 'Formatter.levelText' }" />
-                                <Text id="pipeOrder" text="{= ${marenOrder} === null ? '–' : ${marenOrder} }" />
-                                <ObjectNumber id="pipeFlow" number="{flowPercent}" unit="{i18n>unitPercentOfNormal}" />
-                                <ObjectNumber id="pipePressure" number="{currentPressure}" unit="{i18n>unitPressure}" />
-                                <Text id="pipeServed" text="{= ${servedAreas} || ${i18n>nobody} }" />
-                                <ObjectStatus id="pipeTrust"
-                                    state="{ path: 'doubtful', formatter: 'Formatter.doubtState' }"
-                                    icon="{ path: 'doubtful', formatter: 'Formatter.doubtIcon' }"
-                                    text="{ parts: ['doubtReasons', 'i18n>trusted', 'i18n>doubtNegative', 'i18n>doubtFutureDate', 'i18n>doubtImpossibleFlow', 'i18n>doubtSystem', 'i18n>doubtNight'], formatter: 'Formatter.doubtText' }" />
-                                <ObjectNumber id="pipeCost" number="{cost}" unit="{i18n>unitKronen}" />
-                            </cells>
-                        </ColumnListItem>
-                    </items>
-                </Table>
-
-                <!-- ============ 3. Food — emergency delivery ±80 kronen extra ============ -->
-                <Table id="foodTable" mode="MultiSelect" noDataText="{i18n>noData}"
-                    selectionChange=".onSelectionChange"
-                    items="{ path: '/StockItems', sorter: { path: 'name' }, templateShareable: false }">
-                    <headerToolbar>
-                        <OverflowToolbar id="foodToolbar">
-                            <Title id="foodTitle" text="{i18n>foodTitle}" level="H2" />
-                        </OverflowToolbar>
-                    </headerToolbar>
-                    <infoToolbar>
-                        <OverflowToolbar id="foodInfo"><Label id="foodInfoText" text="{i18n>foodInfo}" wrapping="true" /></OverflowToolbar>
-                    </infoToolbar>
-                    <columns>
-                        <Column id="foodNameCol"><Text id="foodNameHdr" text="{i18n>colProduct}" /></Column>
-                        <Column id="foodQtyCol" hAlign="End"><Text id="foodQtyHdr" text="{i18n>colStock}" /></Column>
-                        <Column id="foodMinCol" hAlign="End" minScreenWidth="Tablet" demandPopin="true"><Text id="foodMinHdr" text="{i18n>colMinimum}" /></Column>
-                        <Column id="foodDaysCol" hAlign="End" minScreenWidth="Tablet" demandPopin="true"><Text id="foodDaysHdr" text="{i18n>colDaysLeft}" /></Column>
-                        <Column id="foodTrustCol"><Text id="foodTrustHdr" text="{i18n>colTrust}" /></Column>
-                        <Column id="foodCostCol" hAlign="End"><Text id="foodCostHdr" text="{i18n>colCostExtra}" /></Column>
-                    </columns>
-                    <items>
-                        <ColumnListItem id="foodRow">
-                            <cells>
-                                <HBox id="foodName" alignItems="Center">
-                                    <core:Icon id="foodIcon" src="{icon}" class="sapUiTinyMarginEnd" />
-                                    <Text id="foodNameText" text="{name}" />
-                                </HBox>
-                                <VBox id="foodQtyBox" alignItems="End">
-                                    <ObjectNumber id="foodQty" number="{currentQuantity}" unit="{unit}" />
-                                    <ObjectStatus id="foodBelowMin" visible="{= ${belowMinimum} === true }" state="Warning"
-                                        icon="sap-icon://ti/arrow-down" text="{i18n>belowMinimum}" />
-                                </VBox>
-                                <ObjectNumber id="foodMin" number="{minStockLevel}" unit="{unit}" />
-                                <ObjectNumber id="foodDays" number="{daysLeft}" unit="{i18n>unitDays}" />
-                                <ObjectStatus id="foodTrust"
-                                    state="{ path: 'doubtful', formatter: 'Formatter.doubtState' }"
-                                    icon="{ path: 'doubtful', formatter: 'Formatter.doubtIcon' }"
-                                    text="{ parts: ['doubtReasons', 'i18n>trusted', 'i18n>doubtNegative', 'i18n>doubtFutureDate', 'i18n>doubtImpossibleFlow', 'i18n>doubtSystem', 'i18n>doubtNight'], formatter: 'Formatter.doubtText' }" />
-                                <ObjectNumber id="foodCost" number="{cost}" unit="{i18n>unitKronen}" />
-                            </cells>
-                        </ColumnListItem>
-                    </items>
-                </Table>
+                    <Table id="foodTable" noDataText="{i18n>noData}"
+                        items="{ path: '/StockItems', sorter: { path: 'name' }, templateShareable: false }">
+                        <headerToolbar>
+                            <OverflowToolbar id="foodToolbar"><Title id="foodTitle" text="{i18n>foodTitle}" level="H3" /></OverflowToolbar>
+                        </headerToolbar>
+                        <columns>
+                            <Column id="foodNameCol"><Text id="foodNameHdr" text="{i18n>colProduct}" /></Column>
+                            <Column id="foodQtyCol" hAlign="End"><Text id="foodQtyHdr" text="{i18n>colStock}" /></Column>
+                            <Column id="foodMinCol" hAlign="End" minScreenWidth="Tablet" demandPopin="true"><Text id="foodMinHdr" text="{i18n>colMinimum}" /></Column>
+                            <Column id="foodDaysCol" hAlign="End" minScreenWidth="Tablet" demandPopin="true"><Text id="foodDaysHdr" text="{i18n>colDaysLeft}" /></Column>
+                            <Column id="foodTrustCol"><Text id="foodTrustHdr" text="{i18n>colTrust}" /></Column>
+                        </columns>
+                        <items>
+                            <ColumnListItem id="foodRow">
+                                <cells>
+                                    <HBox id="foodName" alignItems="Center">
+                                        <core:Icon id="foodIcon" src="{icon}" class="sapUiTinyMarginEnd" />
+                                        <Text id="foodNameText" text="{name}" />
+                                    </HBox>
+                                    <VBox id="foodQtyBox" alignItems="End">
+                                        <ObjectNumber id="foodQty" number="{currentQuantity}" unit="{unit}" />
+                                        <ObjectStatus id="foodBelowMin" visible="{= ${belowMinimum} === true }" state="Warning"
+                                            icon="sap-icon://ti/arrow-down" text="{i18n>belowMinimum}" />
+                                    </VBox>
+                                    <ObjectNumber id="foodMin" number="{minStockLevel}" unit="{unit}" />
+                                    <ObjectNumber id="foodDays" number="{daysLeft}" unit="{i18n>unitDays}" />
+                                    <ObjectStatus id="foodTrust"
+                                        state="{ path: 'doubtful', formatter: 'Formatter.doubtState' }"
+                                        icon="{ path: 'doubtful', formatter: 'Formatter.doubtIcon' }"
+                                        text="{ parts: ['doubtReasons', 'i18n>trusted', 'i18n>doubtNegative', 'i18n>doubtFutureDate', 'i18n>doubtImpossibleFlow', 'i18n>doubtSystem', 'i18n>doubtNight'], formatter: 'Formatter.doubtText' }" />
+                                </cells>
+                            </ColumnListItem>
+                        </items>
+                    </Table>
+                </Panel>
             </VBox>
         </f:content>
     </f:DynamicPage>

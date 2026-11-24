@@ -9,6 +9,7 @@
 import { planIngredient } from './lib/bakery-week';
 import { proposeWeek, type FoodFacts, type ProposalLine, type WaterFacts } from './lib/council-proposal';
 import { planMorningRound, type LandmarkFacts, type PipeFacts, type PipeLevel } from './lib/morning-round';
+import { overviewOfVillage, type AreaInput, type OverviewRow } from './lib/village-overview';
 import {
   EMERGENCY_DELIVERY_EXTRA,
   PIPE_REPAIR_COST,
@@ -276,6 +277,47 @@ async function judgeFood(): Promise<FoodFacts[]> {
   });
 }
 
+/**
+ * "Hoe staat Oakhaven ervoor?" (Rowan): water and food per part of the village, worst first.
+ * Water: the worst pipe on the line that feeds the area (Maren). Food: Tobin's panic / comfort level.
+ */
+async function readOverview(): Promise<OverviewRow[]> {
+  const [{ pipes }, food, landmarks] = await Promise.all([
+    judgeWater(),
+    judgeFood(),
+    SELECT.from('oakhaven.curse.Landmarks').columns('name', 'kind', 'suppliedBy', 'households'),
+  ]);
+  const areas: AreaInput[] = landmarks
+    .filter((l) => str(l.suppliedBy) !== null)
+    .map((l) => {
+      const name = str(l.name) ?? '';
+      // Every pipe the area gets its water through ("valt een leiding uit, dan zit iedereen erachter ook zonder").
+      const line = [...pipes.values()].filter((p) => p.servedAreas.includes(name));
+      const worst = line.reduce<PipeVerdict | null>(
+        (w, p) => (w === null || LEVEL_RANK[p.level] < LEVEL_RANK[w.level] ? p : w),
+        null,
+      );
+      return {
+        name,
+        kind: str(l.kind) ?? '',
+        households: numOrNull(l.households),
+        waterLevel: worst?.level ?? 'ok',
+        worstPipe: worst?.pipeID ?? null,
+        waterDoubts: line.flatMap((p) => [...p.doubts]),
+      };
+    });
+  return overviewOfVillage(
+    areas,
+    food.map((f) => ({
+      name: f.name,
+      forBread: f.forBread,
+      panic: f.panicBeforeDelivery,
+      tight: f.belowMinimum || f.advice === 'late' || f.advice === 'today',
+      doubts: f.doubts,
+    })),
+  );
+}
+
 /** The weekly proposal (Rowan): every pipe and food item that needs money, in order, with the reason. */
 async function readProposal(req: CdsRequest): Promise<ProposalLine[] | ProposalLine | null> {
   const [{ pipes }, food] = await Promise.all([judgeWater(), judgeFood()]);
@@ -307,6 +349,7 @@ export default class CouncilService extends cds.ApplicationService {
     this.on('weekBudget', () => WEEK_BUDGET);
     // Not stored (@cds.persistence.skip): every read computes the proposal from the current data.
     this.on('READ', 'ProposalLines', readProposal);
+    this.on('READ', 'VillageOverview', readOverview);
     return super.init();
   }
 }

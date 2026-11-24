@@ -96,4 +96,25 @@ service CouncilService @(path: 'council', impl: 'srv/council-service') {
         remaining    : Integer;    // budget left after this line
         doubtReasons : String;     // Ilse's signs, comma-separated
   }
+
+  /**
+   * Rowan: "vóór het voorstel wil ik op één blad zien hoe het met Oakhaven gaat, water en eten samen
+   * per deel van het dorp, met de grootste problemen bovenaan." Computed on every read
+   * (srv/lib/village-overview.ts), already sorted worst first. Plain Strings (no named enum types),
+   * so UI5 can format them directly.
+   */
+  @cds.persistence.skip
+  @readonly
+  entity VillageOverview {
+    key area         : String;
+        households   : Integer;
+        waterLevel   : String;     // alarm | attention | ok (Maren)
+        waterCause   : String;     // the pipe behind it
+        foodLevel    : String;     // hunger | tight | ok (Tobin: paniek | zenuwachtig | goed)
+        foodCause    : String;     // products behind it
+        foodCheck    : String;     // products whose number cannot be trusted (Ilse)
+        doubtReasons : String;     // Ilse's signs, comma-separated
+        severity     : Integer;    // 0 red, 1 orange, 2 fine
+        sortOrder    : Integer;
+  }
 }
