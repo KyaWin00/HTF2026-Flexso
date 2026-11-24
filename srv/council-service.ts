@@ -245,6 +245,7 @@ async function judgeFood(): Promise<FoodFacts[]> {
   return items.map((item) => {
     const plan = planIngredient(
       {
+        itemID: str(item.itemID), // market day (Saturday) counts double for flour and milk
         quantity: numOrNull(item.currentQuantity),
         comfortLevel: numOrNull(item.minStockLevel),
         usePerDay: numOrNull(item.consumptionRate),
