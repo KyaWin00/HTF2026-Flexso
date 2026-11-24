@@ -7,11 +7,14 @@
     core:require="{ Formatter: 'oakhaven/rowan/model/formatter', formatMessage: 'sap/base/strings/formatMessage' }"
     displayBlock="true"
     height="100%">
-    <f:DynamicPage id="page" toggleHeaderOnTitleClick="true">
+    <f:DynamicPage id="page" toggleHeaderOnTitleClick="true" backgroundDesign="Transparent" class="rowanApp">
         <f:title>
             <f:DynamicPageTitle id="pageTitle">
                 <f:heading>
-                    <Title id="pageTitleText" text="{i18n>appTitle}" level="H1" />
+                    <HBox id="pageHeading" alignItems="Center">
+                        <core:Icon id="pageLogo" src="sap-icon://ti/building-bank" size="1.75rem" class="rowanLogo sapUiSmallMarginEnd" />
+                        <Title id="pageTitleText" text="{i18n>appTitle}" level="H1" class="rowanHeading" />
+                    </HBox>
                 </f:heading>
                 <f:expandedContent>
                     <Label id="pageSubtitle" text="{i18n>pageSubtitle}" />
@@ -57,6 +60,58 @@
 
         <f:content>
             <VBox id="content">
+                <!-- ============ 0. The proposal: "als u onze 500 kronen had, gaat het hierheen, en waarom" ============
+                     Computed on the server (CouncilService.ProposalLines), already in order. -->
+                <VBox id="proposalBox" class="rowanTile rowanProposal sapUiMediumMarginBottom">
+                    <FlexBox id="proposalHead" justifyContent="SpaceBetween" alignItems="Center" wrap="Wrap">
+                        <VBox id="proposalHeadText">
+                            <Title id="proposalTitle" text="{i18n>proposalTitle}" level="H2" class="rowanHeadline" />
+                            <Text id="proposalSummary" class="rowanSummary"
+                                text="{ parts: ['i18n>proposalSummary', 'view>/proposalSpent', 'view>/budget', 'view>/proposalLeft'], formatter: 'formatMessage' }" />
+                        </VBox>
+                        <Button id="takeProposal" text="{i18n>takeProposal}" tooltip="{i18n>takeProposalTooltip}"
+                            type="Emphasized" icon="sap-icon://ti/checks" press=".onTakeProposal" />
+                    </FlexBox>
+                    <List id="proposalList" noDataText="{i18n>noData}" showSeparators="Inner" backgroundDesign="Transparent"
+                        updateFinished=".onProposalUpdated"
+                        items="{ path: '/ProposalLines', templateShareable: false }">
+                        <CustomListItem id="proposalItem">
+                            <HBox id="proposalRow" alignItems="Start" class="rowanProposalRow">
+                                <Text id="proposalPosition" class="rowanPosition"
+                                    text="{= %{position} === null ? '–' : %{position} }" />
+                                <VBox id="proposalMain" class="rowanProposalMain">
+                                    <FlexBox id="proposalLineHead" alignItems="Center" wrap="Wrap" class="rowanLineHead">
+                                        <Title id="proposalLineTitle" text="{title}" level="H3" class="rowanLineTitle" />
+                                        <ObjectStatus id="proposalStatus"
+                                            text="{= %{status} === 'proposed' ? ${i18n>inProposal} : ${i18n>notInProposal} }"
+                                            state="{ path: 'status', targetType: 'any', formatter: 'Formatter.proposalState' }"
+                                            icon="{ path: 'status', targetType: 'any', formatter: 'Formatter.proposalIcon' }" />
+                                    </FlexBox>
+                                    <Text id="proposalReason" class="rowanReason"
+                                        text="{ parts: [{ path: 'need', targetType: 'any' }, { path: 'status', targetType: 'any' }, { path: 'areas', targetType: 'any' }, 'i18n>reasonNoWaterNow', 'i18n>reasonWaterRisk', 'i18n>reasonHunger', 'i18n>reasonOverBudget', 'i18n>reasonCheckFirst', 'i18n>reasonNoRule', 'i18n>reasonOrderInTime', 'i18n>reasonNobody'], formatter: 'Formatter.reasonText' }" />
+                                    <Text id="proposalHouseholds" class="rowanMuted"
+                                        visible="{= %{households} !== null &amp;&amp; %{households} > 0 }"
+                                        text="{ parts: ['i18n>proposalHouseholds', { path: 'households', targetType: 'any' }], formatter: 'formatMessage' }" />
+                                    <!-- A proposed line whose own numbers hold up, but with something odd around it (Ilse) -->
+                                    <ObjectStatus id="proposalDoubt" state="Warning" icon="sap-icon://ti/question-mark"
+                                        visible="{= %{status} === 'proposed' &amp;&amp; !!%{doubtReasons} }"
+                                        text="{ parts: [{ path: 'doubtReasons', targetType: 'any' }, 'i18n>proposalDoubt', 'i18n>doubtNegative', 'i18n>doubtFutureDate', 'i18n>doubtImpossibleFlow', 'i18n>doubtSystem', 'i18n>doubtNight'], formatter: 'Formatter.proposalDoubt' }" />
+                                    <ObjectStatus id="proposalCheckWhy" state="Warning"
+                                        visible="{= %{status} === 'checkFirst' }"
+                                        text="{ parts: [{ path: 'doubtReasons', targetType: 'any' }, 'i18n>trusted', 'i18n>doubtNegative', 'i18n>doubtFutureDate', 'i18n>doubtImpossibleFlow', 'i18n>doubtSystem', 'i18n>doubtNight'], formatter: 'Formatter.doubtText' }" />
+                                </VBox>
+                                <VBox id="proposalMoney" alignItems="End" class="rowanMoney">
+                                    <ObjectNumber id="proposalCost" number="{cost}" unit="{i18n>unitKronen}"
+                                        emphasized="{= %{status} === 'proposed' }"
+                                        state="{= %{status} === 'proposed' ? 'Success' : 'None' }" />
+                                    <Text id="proposalLeft" class="rowanMuted" visible="{= %{remaining} !== null }"
+                                        text="{ parts: ['i18n>leftAfter', { path: 'remaining', targetType: 'any' }], formatter: 'formatMessage' }" />
+                                </VBox>
+                            </HBox>
+                        </CustomListItem>
+                    </List>
+                </VBox>
+
                 <MessageStrip id="notDecidedStrip" type="Information" showIcon="true" text="{i18n>notDecided}" class="sapUiSmallMarginBottom" />
 
                 <!-- ============ 1. Where does it hurt? Parts of the village ============ -->

@@ -85,6 +85,8 @@ interface PipeVerdict {
   readonly households: number | null;
   readonly nobodyDependsOnIt: boolean;
   readonly doubts: readonly DoubtReason[];
+  /** Only the signs on the pipe's own numbers and sensors (not on its repair records). */
+  readonly measurementDoubts: readonly DoubtReason[];
 }
 
 /** Reads the water network (5 small tables, one query each) and judges every pipe. */
@@ -136,6 +138,11 @@ async function judgeWater(): Promise<{ pipes: Map<string, PipeVerdict>; landmark
     // Ilse: a sensor measuring more than the pipe can carry (SENS-004: 140 L/min on a 50 L/min pipe).
     if (num(r.flowRate) > (nominal.get(pipeId) ?? Infinity)) list.push('impossibleFlow');
   }
+  // Up to here: signs on the MEASUREMENT (the pipe's own numbers and its sensors). Only those make
+  // the council hold back its money — Rowan: "geen geld uitgeven aan een cijfer dat niet klopt".
+  const measurementDoubts = new Map([...doubts].map(([id, list]) => [id, [...list]]));
+  // A suspicious REPAIR record (SOUTH-BRANCH: "system", 03:13, dated 30 Dec) is shown as a warning,
+  // but it does not make the pipe's flow and pressure untrue.
   for (const r of repairRows) {
     const list = doubts.get(str(r.pipe_ID) ?? '');
     if (!list) continue;
@@ -156,6 +163,7 @@ async function judgeWater(): Promise<{ pipes: Map<string, PipeVerdict>; landmark
       households: plan.households,
       nobodyDependsOnIt: plan.nobodyDependsOnIt,
       doubts: [...new Set(doubts.get(pipe.ID))],
+      measurementDoubts: [...new Set(measurementDoubts.get(pipe.ID))],
     });
   }
   const landmarkNames = new Map(landmarkRows.map((r) => [str(r.ID) ?? '', str(r.name) ?? '']));
@@ -260,6 +268,7 @@ async function judgeFood(): Promise<FoodFacts[]> {
       // SQLite returns booleans as 1/0.
       forBread: item.forBread === true || item.forBread === 1,
       advice: plan.advice,
+      panicBeforeDelivery: plan.panicBeforeDelivery === true,
       belowMinimum: num(item.currentQuantity) < num(item.minStockLevel),
       daysAboveComfort: plan.daysAboveComfort,
       doubts: stockDoubts(item),
@@ -278,6 +287,7 @@ async function readProposal(req: CdsRequest): Promise<ProposalLine[] | ProposalL
     households: p.households,
     nobodyDependsOnIt: p.nobodyDependsOnIt,
     doubts: p.doubts,
+    measurementDoubts: p.measurementDoubts,
   }));
   const lines = proposeWeek(water, food, {
     budget: WEEK_BUDGET,

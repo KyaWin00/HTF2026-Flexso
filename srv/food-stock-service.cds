@@ -8,7 +8,20 @@ using { oakhaven.curse as db } from '../db/schema';
 service FoodStockService @(path: 'food-stock', impl: 'srv/food-stock-service') {
 
   @readonly
-  entity StockItems     as projection on db.StockItems;
+  entity StockItems     as projection on db.StockItems actions {
+    /**
+     * Tobin notes a delivery himself: "welk product, hoeveel, van wie en wanneer" (app
+     * src/tobin-delivery). Adds a StockReceivals row and raises the stock — except when the stock
+     * cannot be true (negative): Tobin said that is for Ilse, so then only the delivery is noted.
+     */
+    action recordDelivery(quantity : Decimal(9, 2), supplier : String, receivedAt : DateTime) returns DeliveryResult;
+  };
+
+  /** What happened when a delivery was noted. */
+  type DeliveryResult {
+    stockUpdated : Boolean;       // false = stock left as it was (impossible value, for Ilse)
+    newQuantity  : Decimal(9, 2); // the stock after the delivery
+  }
 
   @readonly
   entity StockReceivals as projection on db.StockReceivals;

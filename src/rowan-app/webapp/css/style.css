@@ -1,1 +1,130 @@
-/* Custom styles for this app. Use theme parameters (var(--sap…)), never hard-coded colours. */
+/* Maandag van de raad — Rowan's council overview, in the hackthefuture.be look shared with Tobin's
+   apps: night-blue grid, mint accent, Bebas Neue headings with a "_" cursor, thin mint outlines.
+   The brand block is the ONLY place with hard-coded colours; status colours stay SAP semantic
+   (Error/Warning/Success) and always come with text + icon. */
+
+/* Bebas Neue, the headline font of hackthefuture.be. Needs internet; without it the headings fall
+   back to Horizon's 72 Black, so nothing breaks offline. */
+@import url("https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap");
+
+/* ---------- hackthefuture.be brand, on this app's own root (the DynamicPage) ---------- */
+.rowanApp {
+	--htf-night: #0b161d;
+	--htf-panel: #1f202e;
+	--htf-mint: #79d7c0;
+	--htf-white: #f5f5f5;
+	--htf-grey: #d6d6d6;
+	--htf-display: "Bebas Neue", "72Black", "72", Arial, sans-serif;
+
+	--htf-line: color-mix(in srgb, var(--htf-mint) 35%, transparent);
+	--htf-grid: color-mix(in srgb, var(--htf-mint) 7%, transparent);
+	--htf-surface: color-mix(in srgb, var(--htf-panel) 70%, var(--htf-night));
+	--htf-muted: color-mix(in srgb, var(--htf-grey) 75%, var(--htf-night));
+
+	background-color: var(--htf-night);
+	background-image:
+		linear-gradient(var(--htf-grid) 1px, transparent 1px),
+		linear-gradient(90deg, var(--htf-grid) 1px, transparent 1px);
+	background-size: 2rem 2rem;
+
+	/* SAP theme parameters follow the brand inside this app, so the controls do too. */
+	--sapBrandColor: var(--htf-mint);
+	--sapFontHeaderFamily: var(--htf-display);
+	--sapObjectHeader_Title_FontFamily: var(--htf-display);
+	--sapObjectHeader_Title_FontSize: 2.25rem;
+	--sapBackgroundColor: var(--htf-night);
+	--sapObjectHeader_Background: transparent;
+	--sapTextColor: var(--htf-white);
+	--sapContent_LabelColor: var(--htf-muted);
+	--sapList_Background: var(--htf-surface);
+	--sapList_HeaderBackground: var(--htf-surface);
+	--sapList_BorderColor: var(--htf-grid);
+	--sapToolbar_Background: transparent;
+	--sapInfobar_NonInteractive_Background: transparent;
+}
+
+/* Headings in the site's voice; the "_" cursor of "HACKATHON_". */
+.rowanApp .rowanHeading,
+.rowanApp .rowanHeadline,
+.rowanApp .rowanLineTitle {
+	font-family: var(--htf-display);
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	font-weight: normal;
+}
+
+.rowanApp .rowanHeading::after,
+.rowanApp .rowanHeadline::after {
+	content: "_";
+	color: var(--htf-mint);
+}
+
+.rowanLogo {
+	color: var(--htf-mint);
+}
+
+/* Thin mint outline, square corners — the boxes of the site. */
+.rowanTile {
+	box-sizing: border-box;
+	padding: 1rem 1.25rem;
+	background: var(--htf-surface);
+	border: 1px solid var(--htf-line);
+}
+
+/* The proposal is the one box with a full-strength mint edge: it is the answer to Rowan's question. */
+.rowanProposal {
+	border-color: var(--htf-mint);
+	border-width: 1px 1px 1px 0.25rem;
+}
+
+.rowanApp .rowanHeadline {
+	font-size: 2rem;
+	line-height: 1.05;
+}
+
+.rowanSummary {
+	font-size: 1.125rem;
+	color: var(--htf-mint);
+}
+
+.rowanProposalRow {
+	width: 100%;
+	padding: 0.5rem 0;
+	gap: 1rem;
+}
+
+/* "1", "2", "3": the order of the proposal, big like the countdown on hackthefuture.be. */
+.rowanPosition {
+	font-family: var(--htf-display);
+	font-size: 2.5rem;
+	line-height: 1;
+	min-width: 2rem;
+	color: var(--htf-mint);
+}
+
+.rowanProposalMain {
+	flex: 1;
+	gap: 0.25rem;
+}
+
+.rowanLineHead {
+	gap: 0.75rem;
+}
+
+.rowanApp .rowanLineTitle {
+	font-size: 1.5rem;
+	line-height: 1;
+}
+
+.rowanReason {
+	font-size: var(--sapFontLargeSize);
+	color: var(--sapTextColor);
+}
+
+.rowanMuted {
+	color: var(--sapContent_LabelColor);
+}
+
+.rowanMoney {
+	min-width: 6rem;
+}

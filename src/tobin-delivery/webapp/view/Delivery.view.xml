@@ -1,0 +1,122 @@
+<mvc:View
+    controllerName="oakhaven.tobindelivery.controller.Delivery"
+    xmlns="sap.m"
+    xmlns:mvc="sap.ui.core.mvc"
+    xmlns:f="sap.f"
+    xmlns:core="sap.ui.core"
+    core:require="{
+        formatMessage: 'sap/base/strings/formatMessage',
+        DateTimeOffset: 'sap/ui/model/odata/type/DateTimeOffset',
+        Decimal: 'sap/ui/model/odata/type/Decimal'
+    }"
+    displayBlock="true"
+    height="100%">
+    <f:DynamicPage id="page" backgroundDesign="Transparent" class="tobinApp">
+        <f:title>
+            <f:DynamicPageTitle id="pageTitle">
+                <f:heading>
+                    <HBox id="pageHeading" alignItems="Center">
+                        <core:Icon id="pageLogo" src="sap-icon://ti/truck-delivery" size="1.75rem" class="tobinLogo sapUiSmallMarginEnd" />
+                        <Title id="pageTitleText" text="{i18n>appTitle}" level="H1" class="tobinHeading" />
+                    </HBox>
+                </f:heading>
+                <f:expandedContent>
+                    <Label id="pageSubtitle" text="{i18n>pageSubtitle}" wrapping="true" />
+                </f:expandedContent>
+            </f:DynamicPageTitle>
+        </f:title>
+        <f:content>
+            <VBox id="pageContent" class="tobinPage">
+
+                <!-- ===================== The form: "welk product, hoeveel, van wie en wanneer" ===================== -->
+                <VBox id="form" class="tobinTile tobinForm" busy="{form>/busy}" busyIndicatorDelay="0">
+                    <Title id="formTitle" text="{i18n>formTitle}" level="H2" class="tobinSection" />
+
+                    <Label id="productLabel" text="{i18n>fieldProduct}" labelFor="productSelect" required="true" class="tobinFieldLabel" />
+                    <Select
+                        id="productSelect"
+                        width="100%"
+                        forceSelection="false"
+                        change=".onProductChange"
+                        items="{ path: 'food>/StockItems', sorter: [ { path: 'forBread', descending: true }, { path: 'name' } ], templateShareable: false }">
+                        <core:Item
+                            id="productItem"
+                            key="{food>ID}"
+                            text="{= %{food>itemID} === 'MILK' ? ${i18n>ingredientMILK} : %{food>itemID} === 'FLOUR' ? ${i18n>ingredientFLOUR} : %{food>itemID} === 'BUTTER' ? ${i18n>ingredientBUTTER} : %{food>itemID} === 'EGGS' ? ${i18n>ingredientEGGS} : %{food>name} }" />
+                    </Select>
+                    <Text
+                        id="currentStock"
+                        class="tobinMeta"
+                        visible="{= ${form>/currentText} !== '' }"
+                        text="{ parts: [ 'i18n>currentStock', 'form>/currentText' ], formatter: 'formatMessage' }" />
+                    <!-- The butter at -3: Tobin "dat is een ander verhaal … vraag het Ilse" -->
+                    <MessageStrip
+                        id="impossibleStrip"
+                        type="Warning"
+                        showIcon="true"
+                        text="{i18n>impossibleStock}"
+                        visible="{form>/impossible}"
+                        class="sapUiTinyMarginTop" />
+
+                    <Label id="quantityLabel" text="{i18n>fieldQuantity}" labelFor="quantityInput" required="true" class="tobinFieldLabel" />
+                    <HBox id="quantityRow" alignItems="Center">
+                        <Input id="quantityInput" type="Number" value="{form>/quantity}" width="10rem" class="tobinBigInput" />
+                        <Text id="quantityUnit" text="{form>/unitText}" class="tobinUnit sapUiSmallMarginBegin" />
+                    </HBox>
+
+                    <Label id="supplierLabel" text="{i18n>fieldSupplier}" labelFor="supplierInput" required="true" class="tobinFieldLabel" />
+                    <Input id="supplierInput" value="{form>/supplier}" width="100%" />
+
+                    <Label id="receivedLabel" text="{i18n>fieldReceivedAt}" labelFor="receivedPicker" required="true" class="tobinFieldLabel" />
+                    <DateTimePicker
+                        id="receivedPicker"
+                        width="100%"
+                        dateValue="{form>/receivedAt}"
+                        maxDate="{form>/now}"
+                        displayFormat="EEEE d MMMM, HH:mm" />
+
+                    <Button id="saveButton" text="{i18n>save}" type="Emphasized" icon="sap-icon://save" press=".onSave" class="tobinSave" />
+                </VBox>
+
+                <!-- ===================== What was noted, newest first ===================== -->
+                <VBox id="history" class="tobinTile">
+                    <Title id="historyTitle" text="{i18n>historyTitle}" level="H2" class="tobinSection" />
+                    <List
+                        id="historyList"
+                        noDataText="{i18n>historyEmpty}"
+                        showSeparators="Inner"
+                        backgroundDesign="Transparent"
+                        growing="true"
+                        growingThreshold="10"
+                        items="{ path: 'food>/StockReceivals', sorter: { path: 'receivedAt', descending: true }, templateShareable: false }">
+                        <CustomListItem id="historyItem">
+                            <HBox id="historyRow" justifyContent="SpaceBetween" alignItems="Center" class="tobinHistoryRow">
+                                <VBox id="historyText">
+                                    <Title
+                                        id="historyProduct"
+                                        level="H3"
+                                        class="tobinName"
+                                        text="{= %{food>item/itemID} === 'MILK' ? ${i18n>ingredientMILK} : %{food>item/itemID} === 'FLOUR' ? ${i18n>ingredientFLOUR} : %{food>item/itemID} === 'BUTTER' ? ${i18n>ingredientBUTTER} : %{food>item/itemID} === 'EGGS' ? ${i18n>ingredientEGGS} : %{food>item/name} }" />
+                                    <Text
+                                        id="historyWhen"
+                                        class="tobinFactText"
+                                        text="{ path: 'food>receivedAt', type: 'DateTimeOffset', formatOptions: { pattern: 'EEEE d MMMM, HH:mm' } }" />
+                                    <Text
+                                        id="historyBy"
+                                        class="tobinMeta"
+                                        text="{ parts: [ 'i18n>historyBy', 'food>supplier', 'food>createdBy' ], formatter: 'formatMessage' }" />
+                                </VBox>
+                                <ObjectNumber
+                                    id="historyQuantity"
+                                    class="tobinBigNumber"
+                                    number="{ path: 'food>quantityReceived', type: 'Decimal', formatOptions: { minFractionDigits: 0, maxFractionDigits: 2 }, constraints: { precision: 9, scale: 2 } }"
+                                    unit="{= %{food>item/unit} === 'KG' ? ${i18n>unitKG} : %{food>item/unit} === 'L' ? ${i18n>unitL} : %{food>item/unit} }"
+                                    emphasized="true" />
+                            </HBox>
+                        </CustomListItem>
+                    </List>
+                </VBox>
+            </VBox>
+        </f:content>
+    </f:DynamicPage>
+</mvc:View>

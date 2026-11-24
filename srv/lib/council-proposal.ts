@@ -13,7 +13,8 @@ import type { PipeLevel } from './morning-round';
  * Why a line costs money this week. Rowan: "Het doet pijn zodra iemand in Oakhaven deze week geen
  * water heeft of honger dreigt te krijgen." How we measure that, he left to us.
  * - noWaterNow:   a pipe in alarm (Maren's limits) that people get their water through
- * - orderTooLate: Tobin's rule says even an order today arrives too late → an emergency delivery
+ * - orderTooLate: even ordered today, the stock drops below HALF of Tobin's comfort level before the
+ *                 delivery — Tobin: "onder de helft daarvan is het paniek" → an emergency delivery
  * - waterRisk:    a pipe that needs attention (Maren's limits) that people get their water through
  */
 export type Need = 'noWaterNow' | 'orderTooLate' | 'waterRisk';
@@ -56,7 +57,10 @@ export interface WaterFacts {
   readonly servedAreas: readonly string[];
   readonly households: number | null;
   readonly nobodyDependsOnIt: boolean;
+  /** All of Ilse's signs on the pipe, its sensors and its repairs — shown to the council. */
   readonly doubts: readonly DoubtReason[];
+  /** Only the signs on the numbers the money depends on (pipe + sensors) — these hold the money back. */
+  readonly measurementDoubts: readonly DoubtReason[];
 }
 
 /** What the service knows about one food item (Tobin's rules + Ilse's signs). */
@@ -66,6 +70,8 @@ export interface FoodFacts {
   /** One of Tobin's bread ingredients — the only items he gave us ordering rules for. */
   readonly forBread: boolean;
   readonly advice: Advice;
+  /** Tobin's panic: below half the comfort level before even today's order arrives. */
+  readonly panicBeforeDelivery: boolean;
   readonly belowMinimum: boolean;
   /** Days of use left above Tobin's comfort level (lower = more urgent); null = unknown. */
   readonly daysAboveComfort: number | null;
@@ -119,7 +125,9 @@ function waterCandidate(pipe: WaterFacts, money: Money): Candidate | null {
   if (pipe.level === 'ok') return null;
   const need: Need | null = pipe.nobodyDependsOnIt ? null : pipe.level === 'alarm' ? 'noWaterNow' : 'waterRisk';
   let status: ProposalStatus | null = null;
-  if (pipe.doubts.length > 0) status = 'checkFirst';
+  // Only a doubtful MEASUREMENT holds the money back; a doubtful repair record stays visible as a
+  // warning in doubtReasons, but the people behind the pipe still get their repair.
+  if (pipe.measurementDoubts.length > 0) status = 'checkFirst';
   else if (pipe.nobodyDependsOnIt) status = 'nobodyAffected';
   return {
     line: {
@@ -143,15 +151,17 @@ function foodCandidate(item: FoodFacts, money: Money): Candidate | null {
   let status: ProposalStatus | null = null;
   let need: Need | null = null;
   if (item.doubts.length > 0) status = 'checkFirst';
-  else if (!item.forBread || item.advice === 'unknown') {
-    // Rowan: "wanneer er te weinig eten is, dat bepaalt Tobin" — no rule from him, so only shown.
+  else if (item.advice === 'unknown') {
+    // No delivery time from Tobin for this item: we cannot say when it gets short — only shown.
     if (!item.belowMinimum) return null;
     status = 'noRule';
-  } else if (item.advice === 'late') {
-    // ⚠️ "late" = Tobin's own rule: even ordered today, it drops below his comfort level before the
-    // delivery. That this is when the council pays for an emergency delivery is still to be confirmed by Tobin.
+  } else if (item.panicBeforeDelivery) {
+    // Rowan: "wanneer er te weinig eten is, dat bepaalt Tobin". Tobin: "onder mijn comfortniveau word
+    // ik zenuwachtig, en onder de helft daarvan is het paniek." Panic before a normal order can
+    // arrive → this is when the council pays for an emergency delivery.
     need = 'orderTooLate';
-  } else if (item.advice === 'today' || item.advice === 'soon') {
+  } else if (item.advice === 'late' || item.advice === 'today' || item.advice === 'soon') {
+    // Nervous, not panic: Tobin orders the normal way; costs the council nothing extra.
     status = 'orderInTime';
   } else {
     return null; // ok: nothing to do
