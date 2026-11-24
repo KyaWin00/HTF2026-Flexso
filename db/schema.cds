@@ -143,3 +143,23 @@ entity Notifications : cuid, managed {
   message      : String;
   acknowledged : Boolean default false;
 }
+
+// ---------------------------------------------------------------------------
+// Investigation — Ilse's marks on records that cannot be trusted
+// ---------------------------------------------------------------------------
+
+/**
+ * Ilse marks a record "niet te vertrouwen" so Maren, Tobin and the council don't act on it.
+ * Only Ilse lifts a mark again (in her app); a lifted mark stays as history (active = false).
+ */
+entity TrustMarks : cuid, managed {
+  /** The entity of the marked record, e.g. "Sensors", "StockItems". */
+  recordType  : String(40);
+  /** ID of the marked record. */
+  recordId    : String(36);
+  /** What the record was when it was marked, in words (e.g. "Meter SENS-004 op BAKERY-BRANCH"). */
+  recordLabel : String(200);
+  note        : String(500);
+  active      : Boolean default true;
+  clearedAt   : Timestamp;
+}

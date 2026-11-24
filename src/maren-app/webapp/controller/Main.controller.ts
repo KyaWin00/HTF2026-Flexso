@@ -47,6 +47,7 @@ const DOUBT_KEYS: Readonly<Record<string, string>> = {
   changedBySystem: "doubtChangedBySystem",
   changedAtNight: "doubtChangedAtNight",
   futureDate: "doubtFutureDate",
+  markedByIlse: "doubtMarkedByIlse",
 };
 
 /** One pipe of /MorningRound as the map needs it. */
