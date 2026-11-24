@@ -44,6 +44,7 @@ interface IngredientDbRow {
   consumptionRate: number | string | null;
   leadTimeDays: number | null;
   unit: string | null;
+  itemID: string | null;
 }
 
 /** A BakeryWeek row as the client sees it. Every field is optional: the client decides ($select). */
@@ -56,7 +57,7 @@ interface BakeryWeekRow {
 
 /** The input fields of the rules: when one is missing from a row, it is read from the database. */
 const INPUT_FIELDS = ['currentQuantity', 'minStockLevel', 'consumptionRate', 'leadTimeDays'] as const;
-const ALL_INPUTS = [...INPUT_FIELDS, 'unit'] as const;
+const ALL_INPUTS = [...INPUT_FIELDS, 'unit', 'itemID'] as const;
 
 function toNumberOrNull(value: unknown): number | null {
   if (value === null || value === undefined || value === '') return null;
@@ -81,6 +82,8 @@ function toBakeryFields(plan: IngredientPlan): Record<string, unknown> {
     belowComfortNow: plan.belowComfortNow,
     belowComfortDate: plan.belowComfortDate,
     orderBelowQuantity: plan.orderBelowQuantity,
+    orderQuantity: plan.orderQuantity,
+    panicBeforeDelivery: plan.panicBeforeDelivery,
     outlook: plan.outlook,
   };
 }
@@ -122,8 +125,10 @@ async function planBakeryWeek(results: unknown): Promise<void> {
     const db = dbById.get(row.ID ?? '');
     const input = (field: (typeof INPUT_FIELDS)[number]): number | null =>
       toNumberOrNull(field in row ? row[field] : db?.[field]);
+    const itemID = 'itemID' in row ? row.itemID : db?.itemID;
     const plan = planIngredient(
       {
+        itemID: typeof itemID === 'string' ? itemID : null,
         quantity: input('currentQuantity'),
         comfortLevel: input('minStockLevel'),
         usePerDay: input('consumptionRate'),

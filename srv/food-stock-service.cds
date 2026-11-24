@@ -22,7 +22,8 @@ service FoodStockService @(path: 'food-stock', impl: 'srv/food-stock-service') {
     date     : Date;
     quantity : Decimal(9, 2); // in `unit`, never below 0
     unit     : String;        // the item's unit (KG, L, …)
-    level    : String;        // 'ok' | 'belowComfort' | 'empty' (DayLevel in srv/lib/bakery-week.ts)
+    level    : String;        // 'ok' | 'belowComfort' | 'panic' | 'empty' (DayLevel in srv/lib/bakery-week.ts)
+    marketDay : Boolean;      // Saturday: flour, milk and bread go twice as fast (Tobin)
   }
 
   /**
@@ -44,6 +45,8 @@ service FoodStockService @(path: 'food-stock', impl: 'srv/food-stock-service') {
     virtual null as belowComfortNow   : Boolean,
     virtual null as belowComfortDate  : Date,         // first morning below the comfort level
     virtual null as orderBelowQuantity : Decimal(9, 2),// below this quantity: order today ("tel na")
+    virtual null as orderQuantity     : Decimal(9, 2),// how much: comfort level + a week of use at delivery
+    virtual null as panicBeforeDelivery : Boolean,    // below half the comfort level before the delivery
     virtual null as outlook           : many OutlookDay // today + 6 days, without new deliveries
   } where forBread = true;
 }

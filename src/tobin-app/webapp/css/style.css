@@ -1,61 +1,84 @@
 /* Week van de bakker. Tobin reads this at 5 am with his coffee: one calm column, the answer first.
-   Look: Hack The Future 2026 ("The Curse of Achrona"), on top of sap_horizon_dark.
+   Look: hackthefuture.be — night-blue grid, mint accent, Bebas Neue headings with a "_" cursor,
+   thin mint outlines instead of filled cards. On top of sap_horizon_dark.
    The brand block below is the ONLY place with hard-coded colours; everything else uses
-   variables. Status colours stay SAP semantic (Error/Warning/Success) with text + icon. 0.5rem grid. */
+   variables. Status colours stay SAP semantic (Error/Warning/Success) with text + icon. */
 
-/* ---------- Hack The Future 2026 brand (tokens from the :root of 2026.hackthefuture.be) ----------
-   Set on the app's own root (the DynamicPage), so the launchpad and the other apps keep Horizon.
-   Not used on purpose: the orange "creatives" gradient (orange means "bestel uiterlijk morgen")
-   and the blue "hackers" gradient; a brand colour must never look like a status. */
+/* Bebas Neue, the headline font of hackthefuture.be. Needs internet; without it the headings fall
+   back to Horizon's own 72 Black (see --htf-display below), so nothing breaks offline. */
+@import url("https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap");
+
+/* ---------- hackthefuture.be brand (colours read from the live site) ----------
+   Set on the app's own root (the DynamicPage), so the launchpad and the other apps keep Horizon. */
 .tobinApp {
-	--htf-dark-grey: #160f1f;
-	--htf-purple: #a52bd9;
-	--htf-pink: #e292f4;
-	--htf-light-blue: #e1e7ff;
-	--htf-middle-grey: #7b7a8f;
+	--htf-night: #0b161d;      /* page background */
+	--htf-panel: #1f202e;      /* panels / dialogs */
+	--htf-mint: #79d7c0;       /* accent: links, buttons, outlines */
+	--htf-white: #f5f5f5;
+	--htf-grey: #d6d6d6;
+	--htf-display: "Bebas Neue", "72Black", "72", Arial, sans-serif;
 
-	/* Derived from the tokens above (no new colours). Contrast on --htf-surface:
-	   light blue 14:1, muted 7.7:1, pink 8:1 (all WCAG AA for normal text). */
-	--htf-surface: color-mix(in srgb, var(--htf-purple) 10%, var(--htf-dark-grey));
-	--htf-edge: color-mix(in srgb, var(--htf-purple) 55%, var(--htf-dark-grey));
-	--htf-line: color-mix(in srgb, var(--htf-purple) 30%, var(--htf-dark-grey));
-	--htf-muted: color-mix(in srgb, var(--htf-light-blue) 45%, var(--htf-middle-grey));
-	/* The one brand gradient in this app: a thin top edge on the morning message. */
-	--htf-accent-gradient: linear-gradient(90deg, var(--htf-purple), var(--htf-pink));
+	/* Derived from the tokens above (no new colours). */
+	--htf-line: color-mix(in srgb, var(--htf-mint) 35%, transparent);
+	--htf-grid: color-mix(in srgb, var(--htf-mint) 7%, transparent);
+	--htf-surface: color-mix(in srgb, var(--htf-panel) 70%, var(--htf-night));
+	--htf-muted: color-mix(in srgb, var(--htf-grey) 75%, var(--htf-night));
 
-	/* The page itself: the DynamicPage has backgroundDesign="Transparent" in the view, so this
-	   background on its own root shows through (no styling of the control's inner DOM). */
-	background: var(--htf-dark-grey);
+	/* The page: night blue with the faint square grid of the site. The DynamicPage has
+	   backgroundDesign="Transparent" in the view, so this shows through. */
+	background-color: var(--htf-night);
+	background-image:
+		linear-gradient(var(--htf-grid) 1px, transparent 1px),
+		linear-gradient(90deg, var(--htf-grid) 1px, transparent 1px);
+	background-size: 2rem 2rem;
 
 	/* SAP theme parameters follow the brand inside this app, so the controls do too. */
-	--sapBrandColor: var(--htf-purple);
-	--sapBackgroundColor: var(--htf-dark-grey);
-	--sapObjectHeader_Background: var(--htf-dark-grey);
-	--sapTextColor: var(--htf-light-blue);
-	--sapGroup_TitleTextColor: var(--htf-light-blue);
-	--sapContent_IconColor: var(--htf-light-blue);
+	--sapBrandColor: var(--htf-mint);
+	--sapFontHeaderFamily: var(--htf-display);
+	--sapObjectHeader_Title_FontFamily: var(--htf-display); /* the DynamicPage title */
+	--sapObjectHeader_Title_FontSize: 2.25rem;
+	--sapBackgroundColor: var(--htf-night);
+	--sapObjectHeader_Background: transparent;
+	--sapTextColor: var(--htf-white);
+	--sapGroup_TitleTextColor: var(--htf-white);
+	--sapContent_IconColor: var(--htf-white);
 	--sapContent_LabelColor: var(--htf-muted);
 	--sapTile_Background: var(--htf-surface);
-	--sapTile_BorderColor: var(--htf-edge);
+	--sapTile_BorderColor: var(--htf-line);
 }
 
-/* Headings in the event's voice: bold, uppercase, tight. Etna and P22 Morris are licensed fonts
-   and not loaded; Horizon's own 72 Black carries the feel. Pink is a brand colour, not a status. */
+/* Headings in the site's voice: Bebas Neue, uppercase, a bit of air between the letters. */
 .tobinApp .tobinHeading,
 .tobinApp .tobinSection,
-.tobinApp .tobinName {
-	font-family: var(--sapFontBlackFamily);
+.tobinApp .tobinName,
+.tobinApp .tobinHeadline,
+.tobinApp .tobinMessageMeta,
+.tobinApp .tobinOrderLabel {
+	font-family: var(--htf-display);
 	text-transform: uppercase;
-	letter-spacing: 0.04em;
+	letter-spacing: 0.03em;
+	font-weight: normal;
 }
 
-.tobinApp .tobinSection,
-.tobinApp .tobinName {
-	color: var(--htf-pink);
+/* The blinking-cursor underscore of "HACKATHON_". */
+.tobinApp .tobinHeading::after,
+.tobinApp .tobinHeadline::after {
+	content: "_";
+	color: var(--htf-mint);
+}
+
+.tobinApp .tobinHeading {
+	font-size: 2rem;
+	line-height: 1;
+}
+
+.tobinApp .tobinSection {
+	color: var(--htf-mint);
+	font-size: 1.25rem;
 }
 
 .tobinLogo {
-	color: var(--htf-pink);
+	color: var(--htf-mint);
 }
 
 .tobinPage {
@@ -63,30 +86,28 @@
 	margin: 0 auto;
 }
 
-/* One flat Horizon tile for the message and for every ingredient: no shadows, no gradients. */
+/* Thin mint outline, square corners — the boxes of the site. No shadows. */
 .tobinTile {
 	box-sizing: border-box;
 	padding: 1rem;
 	margin-bottom: 0.75rem;
 	background: var(--sapTile_Background);
 	border: 1px solid var(--sapTile_BorderColor);
-	border-radius: var(--sapTile_BorderCornerRadius);
+	border-radius: 0;
 }
 
 /* ---------- The morning message ---------- */
 
-/* The one brand gradient: a thin purple-to-pink edge on top of the message. */
+/* The message is the one box with a full-strength mint outline. */
 .tobinMessage {
-	padding-top: 1.25rem;
-	background: var(--htf-accent-gradient) top / 100% 0.25rem no-repeat, var(--sapTile_Background);
+	border-color: var(--htf-mint);
+	border-width: 1px 1px 1px 0.25rem;
 }
 
-/* "JE BERICHT VOOR …": the message header in the event's label style. */
+/* "JE BERICHT VOOR …" */
 .tobinApp .tobinMessageMeta {
-	font-family: var(--sapFontBoldFamily);
-	text-transform: uppercase;
-	letter-spacing: 0.06em;
-	color: var(--htf-pink);
+	color: var(--htf-mint);
+	font-size: 1.125rem;
 }
 
 .tobinMeta {
@@ -95,10 +116,10 @@
 }
 
 /* The answer to his question: the largest text on the page. */
-.tobinHeadline {
+.tobinApp .tobinHeadline {
 	margin: 0.5rem 0;
-	font-size: var(--sapFontHeader3Size);
-	font-family: var(--sapFontBoldFamily);
+	font-size: 2rem;
+	line-height: 1.05;
 }
 
 .tobinMessageLine {
@@ -111,6 +132,39 @@
 	color: var(--sapTextColor);
 }
 
+/* ---------- Countdown (like "00 DAYS" on hackthefuture.be) ---------- */
+
+.tobinCountdownRow {
+	gap: 1rem;
+	margin-top: 0.75rem;
+}
+
+.tobinCountdownTile {
+	min-width: 7rem;
+	gap: 0.25rem;
+}
+
+.tobinCountdownNumber {
+	font-family: var(--htf-display);
+	font-size: 4rem;
+	line-height: 1;
+	color: var(--htf-white);
+}
+
+.tobinCountdownLabel {
+	font-family: var(--htf-display);
+	font-size: 1.125rem;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--htf-mint);
+}
+
+/* ---------- Order list ---------- */
+
+.tobinOrderLine {
+	border-bottom: 1px solid var(--htf-grid);
+}
+
 /* ---------- One card per ingredient ---------- */
 
 .tobinCard {
@@ -119,7 +173,8 @@
 }
 
 .tobinApp .tobinName {
-	font-size: 1.25rem;
+	font-size: 1.75rem;
+	line-height: 1;
 }
 
 /* What to do: as big as the name. */
@@ -131,6 +186,21 @@
 
 .tobinOrderRow {
 	gap: 0 1rem;
+}
+
+.tobinApp .tobinOrderLabel {
+	color: var(--htf-mint);
+	font-size: 1.25rem;
+}
+
+/* "BESTEL  420 liter": the amount to order, the biggest number in the card. */
+.tobinQuantityRow {
+	padding: 0.5rem 0.75rem;
+	border: 1px dashed var(--htf-line);
+}
+
+.tobinBigNumber {
+	font-size: 1.75rem;
 }
 
 .tobinFacts {
@@ -159,6 +229,7 @@
 .tobinDay {
 	padding: 0.25rem 0;
 	gap: 0.5rem;
+	border-bottom: 1px solid var(--htf-grid);
 }
 
 /* ---------- How we count ---------- */
@@ -173,7 +244,7 @@
 		padding: 1.5rem;
 	}
 
-	.tobinMessage {
-		padding-top: 1.75rem;
+	.tobinApp .tobinHeading {
+		font-size: 2.5rem;
 	}
 }
