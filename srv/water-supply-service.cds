@@ -59,7 +59,11 @@ service WaterSupplyService @(path: 'water-supply', impl: 'srv/water-supply-servi
     virtual null as households        : Integer, // households behind it, where known
     virtual null as nobodyDependsOnIt : Boolean,
     virtual null as whyBeforeNext     : String,  // WhyCode in srv/lib/morning-round.ts
-    virtual null as downstreamPipes   : String   // pipeIDs that run dry if this one fails
+    virtual null as downstreamPipes   : String,  // pipeIDs that run dry if this one fails
+    virtual null as measuredLevel     : String,  // level from the measurements alone
+    virtual null as reportedProblem   : String,  // most serious open report (noWater, littleWater, leak, other)
+    virtual null as raisedByReport    : Boolean, // the level comes from a villager's report
+    virtual null as doubtSigns        : String   // Ilse's signs (srv/lib/data-doubt.ts), comma-separated
   };
 
   /** Only today's visits (at most two: "meer dan twee per dag lukt ons niet"), first one first. */

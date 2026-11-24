@@ -4,14 +4,14 @@
     xmlns:mvc="sap.ui.core.mvc"
     xmlns:f="sap.f"
     xmlns:core="sap.ui.core"
-    core:require="{ formatMessage: 'sap/base/strings/formatMessage', Decimal: 'sap/ui/model/odata/type/Decimal' }"
+    core:require="{ formatMessage: 'sap/base/strings/formatMessage', Decimal: 'sap/ui/model/odata/type/Decimal', DateTimeOffset: 'sap/ui/model/odata/type/DateTimeOffset' }"
     displayBlock="true"
     height="100%">
-    <f:DynamicPage id="page" toggleHeaderOnTitleClick="false" backgroundDesign="Transparent" class="marenPage">
+    <f:DynamicPage id="page" toggleHeaderOnTitleClick="false">
         <f:title>
             <f:DynamicPageTitle id="pageTitle">
                 <f:heading>
-                    <Title id="pageTitleText" text="{i18n>appTitle}" level="H1" wrapping="false" class="marenHeading" />
+                    <Title id="pageTitleText" text="{i18n>appTitle}" level="H1" wrapping="false" />
                 </f:heading>
                 <f:expandedContent>
                     <Label id="pageDate" text="{ parts: ['i18n>pageDate', 'view>/todayText'], formatter: 'formatMessage' }" />
@@ -24,40 +24,74 @@
 
         <f:content>
             <VBox id="content" class="marenContent">
-                <!-- ===================== Today: the two stops (phone, 6am, wet gloves) =====================
-                     A work order ("werkbon"): one full-width row per stop, separated by thin rules, stacked on
-                     every screen. The big visit number is the anchor; then where, what is wrong, and why.
-                     Nothing to tap: read-only, refreshes itself and keeps the screen awake. -->
+                <!-- ===================== Today: the two stops (phone, 6am, in the field) =====================
+                     Per stop, in the order a crew needs it: where (place, pipe, from where), how bad (level,
+                     water, pressure, people), anything to watch out for, and why it is this one. The numbered
+                     dot is the same dot as on the pipe plan. -->
+                <!-- The one question the home screen answers: what do we do today? -->
+                <Text id="summary" text="{view>/summary}" class="marenSummary" />
+                <!-- Read the two stops aloud: at the top, not full width but tall enough to hit with thick
+                     work gloves (3.5rem, about 56px). While speaking it becomes "Stoppen". -->
+                <HBox id="readBox" renderType="Bare" class="marenReadBox" visible="{view>/canSpeak}">
+                    <Button
+                        id="readButton"
+                        type="Emphasized"
+                        icon="{= ${view>/speaking} ? 'sap-icon://stop' : 'sap-icon://sound-loud' }"
+                        text="{= ${view>/speaking} ? ${i18n>readAloudStop} : ${i18n>readAloudButton} }"
+                        press=".onReadAloud" />
+                </HBox>
+                <!-- Wide screens: two columns over the full width — today and the reports on the left,
+                     the pipe plan as the picture on the right. On the phone they simply stack. -->
+                <VBox id="columns" renderType="Bare" class="marenColumns">
+                    <VBox id="colMain" renderType="Bare" class="marenColMain">
                 <VBox
                     id="todayList"
                     renderType="Bare"
                     class="marenStops"
                     items="{ path: '/TodayStops', templateShareable: false, events: { change: '.onStopsChange' } }">
                     <HBox id="stopRow" renderType="Bare" alignItems="Start" class="marenRow">
-                        <VBox id="stopOrder" renderType="Bare" class="marenOrder">
-                            <Text id="stopNumber" text="{visitOrder}" wrapping="false" class="marenStopNo" />
-                            <Text id="stopOrderWord" text="{= %{visitOrder} === 1 ? ${i18n>stopFirst} : ${i18n>stopNext} }" wrapping="false" class="marenOrderWord" />
+                        <VBox id="stopOrder" renderType="Bare">
+                            <Text id="stopNumber" text="{visitOrder}" wrapping="false" class="marenDot" />
+                            <Text id="stopOrderWord" text="{= %{visitOrder} === 1 ? ${i18n>stopFirst} : ${i18n>stopNext} }" wrapping="false" class="marenSlot" />
                         </VBox>
                         <VBox id="stopBody" renderType="Bare" class="marenStopBody">
-                            <HBox id="stopHead" alignItems="Baseline" justifyContent="SpaceBetween" wrap="Wrap" class="marenStopHead">
-                                <Title id="stopPlace" text="{endPoint}" level="H2" wrapping="true" class="marenPlace" />
+                            <HBox id="stopHead" alignItems="Baseline" justifyContent="SpaceBetween" wrap="Wrap">
+                                <Title id="stopPlace" text="{endPoint}" level="H3" titleStyle="H3" wrapping="true" />
                                 <ObjectStatus
                                     id="stopLevel"
                                     text="{= ${level} === 'alarm' ? ${i18n>levelAlarm} : ${i18n>levelAttention} }"
                                     icon="{= ${level} === 'alarm' ? 'sap-icon://alert' : 'sap-icon://warning' }"
-                                    state="{= ${level} === 'alarm' ? 'Error' : 'Warning' }"
-                                    class="marenLevel" />
+                                    state="{= ${level} === 'alarm' ? 'Error' : 'Warning' }" />
                             </HBox>
-                            <Text
-                                id="stopProblem"
-                                class="marenFacts"
-                                text="{ parts: ['i18n>stopProblem', 'flowPercent', { path: 'currentPressure', type: 'Decimal', formatOptions: { maxFractionDigits: 0 } }], formatter: 'formatMessage' }" />
-                            <Text
-                                id="stopPeople"
-                                class="marenFacts"
-                                visible="{= %{households} !== null }"
-                                text="{ parts: ['i18n>stopHouseholds', 'households'], formatter: 'formatMessage' }" />
-                            <Text id="stopNobody" class="marenFacts" visible="{nobodyDependsOnIt}" text="{i18n>stopNobody}" />
+                            <!-- Plain words for the field (no pipe codes, no PSI): where to start, how much water
+                                 is left as a bar, and who sits without water. The numbers stay on the laptop. -->
+                            <Text id="stopStart" text="{ parts: ['i18n>stopStart', 'startPoint'], formatter: 'formatMessage' }" class="marenMeta" />
+                            <!-- How much water is left: a bar with the percentage inside it (own markup, see .waterBar). -->
+                            <core:HTML id="stopWater" content="{ parts: ['flowPercent', 'level', 'view>/textsReady'], formatter: '.waterBar' }" />
+                            <HBox id="stopPeopleBox" alignItems="Center" visible="{= %{households} !== null }">
+                                <core:Icon id="stopPeopleIcon" src="sap-icon://group" class="sapUiTinyMarginEnd" />
+                                <Text id="stopPeople" class="marenFacts" text="{ parts: ['i18n>stopPeople', 'households'], formatter: 'formatMessage' }" />
+                            </HBox>
+                            <HBox id="stopNobodyBox" alignItems="Center" visible="{= %{nobodyDependsOnIt} === true }">
+                                <core:Icon id="stopNobodyIcon" src="sap-icon://home" class="sapUiTinyMarginEnd" />
+                                <Text id="stopNobodyText" class="marenFacts" text="{i18n>stopNobody}" />
+                            </HBox>
+                            <!-- Watch out: a villager's report, or Ilse's signs that a number cannot be trusted. -->
+                            <ObjectStatus
+                                id="stopReport"
+                                visible="{= !!%{reportedProblem} }"
+                                icon="sap-icon://feedback"
+                                state="Information"
+                                text="{= ${reportedProblem} === 'noWater' ? ${i18n>reportedNoWater}
+                                       : ${reportedProblem} === 'littleWater' ? ${i18n>reportedLittleWater}
+                                       : ${reportedProblem} === 'leak' ? ${i18n>reportedLeak} : ${i18n>reportedOther} }" />
+                            <ObjectStatus
+                                id="stopDoubt"
+                                visible="{= !!%{doubtSigns} }"
+                                icon="sap-icon://question-mark"
+                                state="Warning"
+                                text="{i18n>doubtCheckFirst}" />
+                            <!-- Why this one (Maren asked for it by name). -->
                             <Text
                                 id="stopWhy"
                                 class="marenWhy"
@@ -67,57 +101,100 @@
                                        : ${whyBeforeNext} === 'peopleFirst' ? ${i18n>whyPeopleFirst}
                                        : ${whyBeforeNext} === 'nobody' ? ${i18n>whyNobody}
                                        : ${i18n>whyLast} }" />
-                            <Text id="stopFrom" text="{ parts: ['i18n>stopFrom', 'startPoint'], formatter: 'formatMessage' }" class="marenMeta" />
                         </VBox>
                     </HBox>
                 </VBox>
 
-                <!-- No repairs today: say so plainly (text + icon + colour), as a row like the others. -->
-                <VBox id="noStopsCard" renderType="Bare" class="marenRow marenRowLast" visible="{view>/noStops}">
-                    <ObjectStatus id="noStopsLevel" text="{i18n>levelOk}" icon="sap-icon://sys-enter-2" state="Success" class="marenLevel" />
-                    <Text id="noStopsText" text="{i18n>noStops}" class="marenWhy" />
+                <!-- No repairs today: say so plainly (text + icon + colour). -->
+                <VBox id="noStopsCard" renderType="Bare" class="marenRow" visible="{view>/noStops}">
+                    <ObjectStatus id="noStopsLevel" text="{i18n>levelOk}" icon="sap-icon://sys-enter-2" state="Success" />
+                    <Text id="noStopsText" text="{i18n>noStops}" class="marenFacts" />
                 </VBox>
 
-                <!-- The visits that wait: shows that skipping an alarm (the reserve loop) is on purpose.
-                     A small plain list under a rule. -->
-                <Title id="laterTitle" text="{i18n>laterTitle}" level="H2" visible="{= !${view>/wide} }" class="marenSection marenLaterTitle" />
+
+                <!-- Reports from villagers: something the crew can act on during the day. Newest first. -->
+                <Title id="reportsTitle" text="{i18n>reportsTitle}" level="H2" titleStyle="H4" class="marenSection" />
                 <List
-                    id="laterList"
-                    ariaLabelledBy="laterTitle"
-                    showSeparators="Inner"
+                    id="reportList"
+                    ariaLabelledBy="reportsTitle"
+                    showSeparators="None"
                     backgroundDesign="Transparent"
-                    visible="{= !${view>/wide} }"
-                    noDataText="{i18n>laterNone}"
-                    class="marenLater"
-                    items="{ path: '/LaterStops', templateShareable: false }">
+                    noDataText="{i18n>reportsNone}"
+                    items="{
+                        path: '/WaterReports',
+                        filters: [{ path: 'handled', operator: 'EQ', value1: false }],
+                        sorter: { path: 'createdAt', descending: true },
+                        templateShareable: false
+                    }">
                     <items>
-                        <CustomListItem id="laterItem" type="Inactive">
-                            <VBox id="laterBox" class="marenLaterItem">
-                                <HBox id="laterHead" alignItems="Baseline" justifyContent="SpaceBetween" wrap="Wrap" class="marenLaterHead">
-                                    <Text id="laterPlace" text="{endPoint}" class="marenStrong" />
-                                    <ObjectStatus
-                                        id="laterLevel"
-                                        text="{= ${level} === 'alarm' ? ${i18n>levelAlarm} : ${i18n>levelAttention} }"
-                                        icon="{= ${level} === 'alarm' ? 'sap-icon://alert' : 'sap-icon://warning' }"
-                                        state="{= ${level} === 'alarm' ? 'Error' : 'Warning' }" />
-                                </HBox>
-                                <Text id="laterWhy" class="marenMeta" text="{= ${whyBeforeNext} === 'alarmFirst' ? ${i18n>whyAlarmFirst}
-                                           : ${whyBeforeNext} === 'areaOrder' ? ${i18n>whyAreaOrder}
-                                           : ${whyBeforeNext} === 'upstream' ? ${i18n>whyUpstream}
-                                           : ${whyBeforeNext} === 'peopleFirst' ? ${i18n>whyPeopleFirst}
-                                           : ${whyBeforeNext} === 'nobody' ? ${i18n>whyNobody}
-                                           : ${i18n>whyLast} }" />
-                            </VBox>
+                        <CustomListItem id="reportItem" type="Inactive">
+                            <HBox id="reportRow" renderType="Bare" class="marenReportRow">
+                                <VBox id="reportBody" renderType="Bare" class="marenReportBody">
+                                    <Text
+                                        id="reportLine"
+                                        class="marenStrong"
+                                        text="{= ${problem} === 'noWater' ? ${i18n>problemNoWater}
+                                               : ${problem} === 'littleWater' ? ${i18n>problemLittleWater}
+                                               : ${problem} === 'leak' ? ${i18n>problemLeak} : ${i18n>problemOther} }" />
+                                    <Text id="reportPlace" text="{place}" />
+                                    <Text id="reportNote" visible="{= !!%{note} }" text="{note}" class="marenMeta" />
+                                    <Text id="reportTime" text="{ path: 'createdAt', type: 'DateTimeOffset', constraints: { precision: 7 }, formatOptions: { pattern: 'EEEE HH:mm' } }" class="marenMeta" />
+                                </VBox>
+                                <Button id="reportDone" text="{i18n>reportHandled}" icon="sap-icon://accept" press=".onMarkHandled" />
+                            </HBox>
                         </CustomListItem>
                     </items>
                 </List>
 
+                    </VBox>
+                    <VBox id="colSide" renderType="Bare" class="marenColSide">
+                <!-- The pipe plan, drawn like a transit map: the spring on top, every pipe a line in its
+                     level, today's stops as the same numbered dots, "zonder water" where people are dry. -->
+                <Title id="planTitle" text="{i18n>planTitle}" level="H2" titleStyle="H4" class="marenSection" />
+                <core:HTML id="plan" content="{view>/planSvg}" afterRendering=".onPlanRendered" />
+
+                <!-- Tomorrow and later: two repairs a day, so visit 3 is tomorrow morning, 4 tomorrow
+                     afternoon (if nothing new comes in). Shows that skipping the reserve loop is on purpose. -->
+                <Title id="laterTitle" text="{i18n>laterTitle}" level="H2" titleStyle="H4" class="marenSection" />
+                <VBox
+                    id="laterList"
+                    renderType="Bare"
+                    items="{ path: '/LaterStops', templateShareable: false, events: { change: '.onLaterChange' } }">
+                    <HBox id="laterRow" renderType="Bare" class="marenLaterRow">
+                        <Text
+                            id="laterSlot"
+                            class="marenLaterSlot"
+                            text="{= %{visitOrder} === 3 ? ${i18n>slotTomorrowMorning} : %{visitOrder} === 4 ? ${i18n>slotTomorrowAfternoon} : ${i18n>slotLater} }" />
+                        <VBox id="laterBody" renderType="Bare" class="marenLaterBody">
+                            <HBox id="laterHead" alignItems="Baseline" justifyContent="SpaceBetween" wrap="Wrap">
+                                <Text id="laterPlace" text="{endPoint}" class="marenStrong" />
+                                <ObjectStatus
+                                    id="laterLevel"
+                                    text="{= ${level} === 'alarm' ? ${i18n>levelAlarm} : ${i18n>levelAttention} }"
+                                    icon="{= ${level} === 'alarm' ? 'sap-icon://alert' : 'sap-icon://warning' }"
+                                    state="{= ${level} === 'alarm' ? 'Error' : 'Warning' }" />
+                            </HBox>
+                            <Text id="laterWhy" class="marenMeta" text="{= ${whyBeforeNext} === 'alarmFirst' ? ${i18n>whyAlarmFirst}
+                                       : ${whyBeforeNext} === 'areaOrder' ? ${i18n>whyAreaOrder}
+                                       : ${whyBeforeNext} === 'upstream' ? ${i18n>whyUpstream}
+                                       : ${whyBeforeNext} === 'peopleFirst' ? ${i18n>whyPeopleFirst}
+                                       : ${whyBeforeNext} === 'nobody' ? ${i18n>whyNobody}
+                                       : ${i18n>whyLast} }" />
+                            <ObjectStatus id="laterDoubt" visible="{= !!%{doubtSigns} }" icon="sap-icon://question-mark" state="Warning" text="{i18n>doubtCheckFirst}" />
+                        </VBox>
+                    </HBox>
+                </VBox>
+                <Text id="laterNone" visible="{view>/noLater}" text="{i18n>laterNone}" class="marenMeta" />
+                <Text id="laterHint" visible="{= !${view>/noLater} }" text="{i18n>laterHint}" class="marenMeta" />
+
+                    </VBox>
+                </VBox>
                 <Text id="refreshed" class="marenMeta marenRefreshed" text="{ parts: ['i18n>refreshed', 'view>/refreshedText'], formatter: 'formatMessage' }" />
 
                 <!-- ===================== Details (laptop, in the evening) =====================
                      Map first (where is everything?), then the rules and the table with the numbers. -->
                 <VBox id="details" visible="{view>/wide}" class="marenDetails">
-                    <Title id="mapTitle" text="{i18n>mapTitle}" level="H2" class="marenSection" />
+                    <Title id="mapTitle" text="{i18n>mapTitle}" level="H2" titleStyle="H4" class="marenSection" />
                     <Text id="mapHelp" text="{i18n>mapHelp}" class="marenMeta" />
                     <HBox id="mapLegend" wrap="Wrap" class="marenLegend">
                         <ObjectStatus id="legendAlarm" text="{i18n>mapLegendAlarm}" icon="sap-icon://alert" state="Error" class="sapUiSmallMarginEnd" />
@@ -134,7 +211,7 @@
                         class="sapUiSmallMarginBottom" />
                     <core:HTML id="map" content="{view>/mapSvg}" afterRendering=".onMapRendered" />
 
-                    <Title id="detailsTitle" text="{i18n>detailsTitle}" level="H2" class="marenSection marenDetailsTitle" />
+                    <Title id="detailsTitle" text="{i18n>detailsTitle}" level="H2" titleStyle="H4" class="marenSection marenDetailsTitle" />
                     <Panel id="rulesPanel" headerText="{i18n>rulesTitle}" expandable="true" expanded="false" backgroundDesign="Transparent">
                         <VBox id="rulesList">
                             <Text id="rulesAlarm" text="{i18n>rulesAlarm}" class="marenRule" />
@@ -163,6 +240,7 @@
                             <Column id="colFlow" hAlign="End" minScreenWidth="Desktop" demandPopin="true"><Text id="colFlowHdr" text="{i18n>colFlow}" /></Column>
                             <Column id="colBehind" minScreenWidth="Desktop" demandPopin="true"><Text id="colBehindHdr" text="{i18n>colBehind}" /></Column>
                             <Column id="colWhy" minScreenWidth="Desktop" demandPopin="true"><Text id="colWhyHdr" text="{i18n>colWhy}" /></Column>
+                            <Column id="colDoubt" minScreenWidth="Desktop" demandPopin="true"><Text id="colDoubtHdr" text="{i18n>colDoubt}" /></Column>
                         </columns>
                         <items>
                             <ColumnListItem
@@ -211,6 +289,12 @@
                                                : ${whyBeforeNext} === 'peopleFirst' ? ${i18n>whyPeopleFirst}
                                                : ${whyBeforeNext} === 'nobody' ? ${i18n>whyNobody}
                                                : ${i18n>whyLast} }" />
+                                    <ObjectStatus
+                                        id="doubtCell"
+                                        visible="{= !!%{doubtSigns} }"
+                                        icon="sap-icon://question-mark"
+                                        state="Warning"
+                                        text="{ parts: ['doubtSigns', 'view>/textsReady'], formatter: '.formatDoubt' }" />
                                 </cells>
                             </ColumnListItem>
                         </items>

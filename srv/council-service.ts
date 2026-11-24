@@ -2,9 +2,12 @@
  * Handlers of `CouncilService` (see `council-service.cds`) — Rowan's Monday overview.
  *
  * It decides nothing new: water levels and the visiting order come from Maren's rules
- * (lib/morning-round.ts), the warning signs from Ilse, the prices and the budget from Rowan
- * (lib/council-rules.ts). This file only puts them next to each other.
+ * (lib/morning-round.ts), food urgency from Tobin's rules (lib/bakery-week.ts), the warning signs
+ * from Ilse, the prices and the budget from Rowan (lib/council-rules.ts). This file puts them next
+ * to each other; the weekly proposal itself is decided in lib/council-proposal.ts.
  */
+import { planIngredient } from './lib/bakery-week';
+import { proposeWeek, type FoodFacts, type ProposalLine, type WaterFacts } from './lib/council-proposal';
 import { planMorningRound, type LandmarkFacts, type PipeFacts, type PipeLevel } from './lib/morning-round';
 import {
   EMERGENCY_DELIVERY_EXTRA,
@@ -22,10 +25,17 @@ type DbRow = Readonly<Record<string, unknown>>;
 /** A row as the client receives it: we add the virtual fields to it. */
 type ApiRow = Record<string, unknown> & { ID?: string };
 
+/** The slice of a CAP request this file uses. */
+interface CdsRequest {
+  /** For a READ of one row: its key (`ID`). */
+  readonly data: Readonly<Record<string, unknown>>;
+}
+
 /** The slice of a CAP service this file uses. */
 interface CdsService {
   init(): Promise<void>;
   on(event: string, handler: () => unknown): void;
+  on(event: string, entity: string, handler: (req: CdsRequest) => unknown): void;
   after(event: string, entity: string, handler: (results: unknown) => unknown): void;
 }
 
@@ -54,7 +64,7 @@ function num(value: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-function intOrNull(value: unknown): number | null {
+function numOrNull(value: unknown): number | null {
   return value === null || value === undefined || value === '' ? null : num(value);
 }
 
@@ -72,6 +82,8 @@ interface PipeVerdict {
   readonly flowPercent: number;
   readonly marenOrder: number | null;
   readonly servedAreas: readonly string[];
+  readonly households: number | null;
+  readonly nobodyDependsOnIt: boolean;
   readonly doubts: readonly DoubtReason[];
 }
 
@@ -100,8 +112,8 @@ async function judgeWater(): Promise<{ pipes: Map<string, PipeVerdict>; landmark
     name: str(r.name) ?? '',
     kind: str(r.kind) ?? '',
     suppliedBy: str(r.suppliedBy),
-    waterPriority: intOrNull(r.waterPriority),
-    households: intOrNull(r.households),
+    waterPriority: numOrNull(r.waterPriority),
+    households: numOrNull(r.households),
   }));
   const plans = planMorningRound(pipes, landmarks);
 
@@ -141,6 +153,8 @@ async function judgeWater(): Promise<{ pipes: Map<string, PipeVerdict>; landmark
       flowPercent: plan.flowPercent,
       marenOrder: plan.visitOrder,
       servedAreas: plan.servedAreas,
+      households: plan.households,
+      nobodyDependsOnIt: plan.nobodyDependsOnIt,
       doubts: [...new Set(doubts.get(pipe.ID))],
     });
   }
@@ -192,6 +206,14 @@ async function addAreaVerdicts(results: unknown): Promise<void> {
   }
 }
 
+/** Ilse's signs on one StockItems row (needs currentQuantity, modifiedAt, modifiedBy). */
+function stockDoubts(item: DbRow): DoubtReason[] {
+  const doubts: DoubtReason[] = changeDoubts({ modifiedAt: str(item.modifiedAt), modifiedBy: str(item.modifiedBy) });
+  // Ilse: negative stock (BUTTER -3) "kan gewoon niet waar zijn".
+  if (num(item.currentQuantity) < 0) doubts.push('negative');
+  return doubts;
+}
+
 /** Fills in the virtual fields of StockItems (facts + Ilse's signs; no verdict — that is Tobin's). */
 async function addStockFacts(results: unknown): Promise<void> {
   const rows = rowsOf(results);
@@ -204,9 +226,7 @@ async function addStockFacts(results: unknown): Promise<void> {
     if (!item) continue;
     const quantity = num(item.currentQuantity);
     const rate = num(item.consumptionRate);
-    const doubts: DoubtReason[] = changeDoubts({ modifiedAt: str(item.modifiedAt), modifiedBy: str(item.modifiedBy) });
-    // Ilse: negative stock (BUTTER -3) "kan gewoon niet waar zijn".
-    if (quantity < 0) doubts.push('negative');
+    const doubts = stockDoubts(item);
     row.daysLeft = rate > 0 ? Math.round((quantity / rate) * 10) / 10 : null;
     row.belowMinimum = quantity < num(item.minStockLevel);
     row.doubtReasons = joinReasons(doubts);
@@ -215,12 +235,67 @@ async function addStockFacts(results: unknown): Promise<void> {
   }
 }
 
+/** Reads the pantry (one query) and applies Tobin's ordering rule and Ilse's signs to every item. */
+async function judgeFood(): Promise<FoodFacts[]> {
+  const items = await SELECT.from('oakhaven.curse.StockItems').columns(
+    'itemID', 'name', 'unit', 'currentQuantity', 'minStockLevel', 'consumptionRate', 'leadTimeDays', 'forBread',
+    'modifiedAt', 'modifiedBy',
+  );
+  const today = new Date();
+  return items.map((item) => {
+    const plan = planIngredient(
+      {
+        quantity: numOrNull(item.currentQuantity),
+        comfortLevel: numOrNull(item.minStockLevel),
+        usePerDay: numOrNull(item.consumptionRate),
+        leadTimeDays: numOrNull(item.leadTimeDays),
+        unit: str(item.unit),
+      },
+      today,
+    );
+    return {
+      itemID: str(item.itemID) ?? '',
+      name: str(item.name) ?? '',
+      // SQLite returns booleans as 1/0.
+      forBread: item.forBread === true || item.forBread === 1,
+      advice: plan.advice,
+      belowMinimum: num(item.currentQuantity) < num(item.minStockLevel),
+      daysAboveComfort: plan.daysAboveComfort,
+      doubts: stockDoubts(item),
+    };
+  });
+}
+
+/** The weekly proposal (Rowan): every pipe and food item that needs money, in order, with the reason. */
+async function readProposal(req: CdsRequest): Promise<ProposalLine[] | ProposalLine | null> {
+  const [{ pipes }, food] = await Promise.all([judgeWater(), judgeFood()]);
+  const water: WaterFacts[] = [...pipes.values()].map((p) => ({
+    pipeID: p.pipeID,
+    level: p.level,
+    marenOrder: p.marenOrder,
+    servedAreas: p.servedAreas,
+    households: p.households,
+    nobodyDependsOnIt: p.nobodyDependsOnIt,
+    doubts: p.doubts,
+  }));
+  const lines = proposeWeek(water, food, {
+    budget: WEEK_BUDGET,
+    repairCost: PIPE_REPAIR_COST,
+    emergencyExtra: EMERGENCY_DELIVERY_EXTRA,
+  });
+  // A read of one line (ProposalLines('water-NORTH-BRANCH-02')) gives that line, or 404 when unknown.
+  const id = str(req.data.ID);
+  return id === null ? lines : (lines.find((line) => line.ID === id) ?? null);
+}
+
 export default class CouncilService extends cds.ApplicationService {
   override async init(): Promise<void> {
     this.after('READ', 'WaterPipes', addPipeVerdicts);
     this.after('READ', 'Areas', addAreaVerdicts);
     this.after('READ', 'StockItems', addStockFacts);
     this.on('weekBudget', () => WEEK_BUDGET);
+    // Not stored (@cds.persistence.skip): every read computes the proposal from the current data.
+    this.on('READ', 'ProposalLines', readProposal);
     return super.init();
   }
 }

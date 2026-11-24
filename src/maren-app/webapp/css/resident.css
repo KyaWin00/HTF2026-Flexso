@@ -1,0 +1,23 @@
+/* Resident part (view/Resident.view.xml): plain and flat, phone first. Theme parameters only. */
+
+.residentForm {
+  max-width: 40rem;
+}
+
+.residentIntro {
+  color: var(--sapContent_LabelColor);
+}
+
+.residentQuestion {
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.residentSend {
+  margin-top: 1.5rem;
+}
+
+.residentHint {
+  margin-top: 0.5rem;
+  color: var(--sapContent_LabelColor);
+}

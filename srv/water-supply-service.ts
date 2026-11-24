@@ -10,6 +10,7 @@
  */
 import { startDemoSensorFeed } from './lib/demo-freshness';
 import { planMorningRound, type LandmarkFacts, type PipeFacts, type PipePlan } from './lib/morning-round';
+import { doubtSigns, type DoubtSign, type RecordStamp } from './lib/data-doubt';
 
 // 👋 EXAMPLE — the shape of a WaterPipes row as our handler sees it. Every field is optional:
 //    the client decides which fields it asks for ($select).
@@ -118,10 +119,40 @@ interface PipeDbRow {
   nominalFlowRate: number | string | null;
   currentFlowRate: number | string | null;
   currentPressure: number | string | null;
+  createdBy: string | null;
+  createdAt: string | null;
+  modifiedBy: string | null;
+  modifiedAt: string | null;
+}
+
+/** Who changed a record and when — the `managed` fields Ilse's signs look at. */
+interface StampDbRow {
+  pipe_ID: string | null;
+  createdBy: string | null;
+  createdAt: string | null;
+  modifiedBy: string | null;
+  modifiedAt: string | null;
+}
+
+/** A Sensors row (only what the doubt signs need). */
+interface SensorDbRow extends StampDbRow {
+  flowRate: number | string | null;
+}
+
+/** A Repairs row (only what the doubt signs need). */
+interface RepairDbRow extends StampDbRow {
+  repairDate: string | null;
+}
+
+/** An open WaterReports row. */
+interface ReportDbRow {
+  area_ID: string | null;
+  problem: string | null;
 }
 
 /** A Landmarks row as the database returns it. */
 interface LandmarkDbRow {
+  ID: string;
   name: string | null;
   kind: string | null;
   suppliedBy: string | null;
@@ -142,7 +173,7 @@ function toNumber(value: number | string | null): number {
   return Number.isFinite(number) ? number : 0;
 }
 
-function toPipeFacts(row: PipeDbRow): PipeFacts {
+function toPipeFacts(row: PipeDbRow, reports: readonly string[]): PipeFacts {
   return {
     ID: row.ID,
     pipeID: row.pipeID,
@@ -151,7 +182,43 @@ function toPipeFacts(row: PipeDbRow): PipeFacts {
     nominalFlowRate: toNumber(row.nominalFlowRate),
     currentFlowRate: toNumber(row.currentFlowRate),
     currentPressure: toNumber(row.currentPressure),
+    reports,
   };
+}
+
+function stampOf(row: Omit<StampDbRow, 'pipe_ID'>): RecordStamp {
+  return { createdBy: row.createdBy, createdAt: row.createdAt, modifiedBy: row.modifiedBy, modifiedAt: row.modifiedAt };
+}
+
+/** Ilse's doubt signs for every pipe, by pipe ID. */
+function doubtsByPipe(pipes: readonly PipeDbRow[], sensors: readonly SensorDbRow[], repairs: readonly RepairDbRow[]): Map<string, DoubtSign[]> {
+  const now = new Date();
+  return new Map(
+    pipes.map((pipe) => [
+      pipe.ID,
+      doubtSigns(
+        {
+          nominalFlowRate: toNumber(pipe.nominalFlowRate),
+          pipe: stampOf(pipe),
+          sensors: sensors.filter((s) => s.pipe_ID === pipe.ID).map((s) => ({ ...stampOf(s), flowRate: toNumber(s.flowRate) })),
+          repairs: repairs.filter((r) => r.pipe_ID === pipe.ID).map((r) => ({ ...stampOf(r), repairDate: r.repairDate })),
+        },
+        now,
+      ),
+    ]),
+  );
+}
+
+/** Open reports per pipeID: a report about a place counts for the pipe that feeds that place. */
+function reportsByPipe(reports: readonly ReportDbRow[], landmarks: readonly LandmarkDbRow[]): Map<string, string[]> {
+  const pipeOfArea = new Map(landmarks.map((l) => [l.ID, l.suppliedBy]));
+  const byPipe = new Map<string, string[]>();
+  for (const report of reports) {
+    const pipeID = pipeOfArea.get(report.area_ID ?? '');
+    if (!pipeID || !report.problem) continue;
+    byPipe.set(pipeID, [...(byPipe.get(pipeID) ?? []), report.problem]);
+  }
+  return byPipe;
 }
 
 function toLandmarkFacts(row: LandmarkDbRow): LandmarkFacts {
@@ -165,8 +232,12 @@ function toLandmarkFacts(row: LandmarkDbRow): LandmarkFacts {
 }
 
 /** The virtual fields of MorningRound for one plan (lists become comma-separated strings). */
-function toRoundFields(plan: PipePlan): Record<string, unknown> {
+function toRoundFields(plan: PipePlan, doubts: readonly DoubtSign[]): Record<string, unknown> {
   return {
+    measuredLevel: plan.measuredLevel,
+    reportedProblem: plan.reportedProblem,
+    raisedByReport: plan.raisedByReport,
+    doubtSigns: doubts.join(','),
     level: plan.level,
     flowPercent: plan.flowPercent,
     lowFlow: plan.lowFlow,
@@ -207,19 +278,31 @@ async function planRound(results: unknown, keep: RoundSelection): Promise<void> 
   );
   if (rows.length === 0) return;
 
-  const [pipes, landmarks] = await Promise.all([
+  const stamp = ['pipe_ID', 'createdBy', 'createdAt', 'modifiedBy', 'modifiedAt'];
+  const [pipes, landmarks, sensors, repairs, reports] = await Promise.all([
     SELECT.from('oakhaven.curse.WaterPipes').columns<PipeDbRow>(
       'ID', 'pipeID', 'startPoint', 'endPoint', 'nominalFlowRate', 'currentFlowRate', 'currentPressure',
+      'createdBy', 'createdAt', 'modifiedBy', 'modifiedAt',
     ),
     SELECT.from('oakhaven.curse.Landmarks').columns<LandmarkDbRow>(
-      'name', 'kind', 'suppliedBy', 'waterPriority', 'households',
+      'ID', 'name', 'kind', 'suppliedBy', 'waterPriority', 'households',
     ),
+    SELECT.from('oakhaven.curse.Sensors').columns<SensorDbRow>(...stamp, 'flowRate'),
+    SELECT.from('oakhaven.curse.Repairs').columns<RepairDbRow>(...stamp, 'repairDate'),
+    // Open reports only. Until `npm run db:reset` created the table, there are simply none.
+    SELECT.from('oakhaven.curse.WaterReports').columns<ReportDbRow>('area_ID', 'problem').where({ handled: false })
+      .then((r) => r, (): ReportDbRow[] => []),
   ]);
-  const plans = planMorningRound(pipes.map(toPipeFacts), landmarks.map(toLandmarkFacts));
+  const openReports = reportsByPipe(reports, landmarks);
+  const plans = planMorningRound(
+    pipes.map((p) => toPipeFacts(p, openReports.get(p.pipeID) ?? [])),
+    landmarks.map(toLandmarkFacts),
+  );
+  const doubts = doubtsByPipe(pipes, sensors, repairs);
 
   for (const row of rows) {
     const plan = plans.get(row.ID ?? '');
-    if (plan) Object.assign(row, toRoundFields(plan));
+    if (plan) Object.assign(row, toRoundFields(plan, doubts.get(row.ID ?? '') ?? []));
   }
   if (Array.isArray(results)) {
     const ordered = rows.sort(byVisitOrder).filter(keep);

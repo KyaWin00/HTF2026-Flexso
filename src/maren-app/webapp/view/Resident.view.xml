@@ -1,0 +1,91 @@
+<mvc:View
+    controllerName="oakhaven.maren.controller.Resident"
+    xmlns="sap.m"
+    xmlns:mvc="sap.ui.core.mvc"
+    xmlns:f="sap.f"
+    xmlns:app="http://schemas.sap.com/sapui5/extension/sap.ui.core.CustomData/1"
+    displayBlock="true"
+    height="100%">
+    <!-- Resident part: a villager tells Maren that something is wrong with the water at their place.
+         Phone first: two short questions with big rows to tap, an optional note, one button.
+         Residents pick their PLACE (they do not know which pipe is theirs); the server finds the pipe. -->
+    <f:DynamicPage id="residentPage" toggleHeaderOnTitleClick="false" backgroundDesign="Transparent">
+        <f:title>
+            <f:DynamicPageTitle id="residentPageTitle">
+                <f:heading>
+                    <Title id="residentHeading" text="{i18n>reportTitle}" level="H1" wrapping="true" />
+                </f:heading>
+            </f:DynamicPageTitle>
+        </f:title>
+
+        <f:content>
+            <VBox id="reportForm" class="residentForm" busy="{view>/busy}" busyIndicatorDelay="0">
+                <Text id="reportIntro" text="{i18n>reportIntro}" class="residentIntro" />
+
+                <!-- 1. Where: only places that get their water through a pipe. -->
+                <Title id="placeLabel" text="{i18n>reportPlaceLabel}" level="H2" titleStyle="H4" wrapping="true" class="residentQuestion" />
+                <List
+                    id="placeList"
+                    mode="SingleSelectLeft"
+                    includeItemInSelection="true"
+                    backgroundDesign="Transparent"
+                    ariaLabelledBy="placeLabel"
+                    noDataText="{i18n>reportNoPlaces}"
+                    selectionChange=".onPlaceSelect"
+                    items="{
+                        path: '/Landmarks',
+                        filters: [{ path: 'suppliedBy', operator: 'NE', value1: null }],
+                        sorter: { path: 'name' }
+                    }">
+                    <StandardListItem id="placeItem" title="{name}" wrapping="true" />
+                </List>
+
+                <!-- 2. What: the four problem codes of reportProblem. -->
+                <Title id="problemLabel" text="{i18n>reportProblemLabel}" level="H2" titleStyle="H4" wrapping="true" class="residentQuestion" />
+                <List
+                    id="problemList"
+                    mode="SingleSelectLeft"
+                    includeItemInSelection="true"
+                    backgroundDesign="Transparent"
+                    ariaLabelledBy="problemLabel"
+                    selectionChange=".onProblemSelect">
+                    <StandardListItem id="problemNoWater" title="{i18n>problemNoWater}" wrapping="true" icon="sap-icon://ti/droplet-off" app:problem="noWater" />
+                    <StandardListItem id="problemLittleWater" title="{i18n>problemLittleWater}" wrapping="true" icon="sap-icon://ti/droplet-half" app:problem="littleWater" />
+                    <StandardListItem id="problemLeak" title="{i18n>problemLeak}" wrapping="true" icon="sap-icon://ti/droplets" app:problem="leak" />
+                    <StandardListItem id="problemOther" title="{i18n>problemOther}" wrapping="true" icon="sap-icon://ti/message-dots" app:problem="other" />
+                </List>
+
+                <!-- 3. Optional note (the server allows at most 500 characters). -->
+                <Label id="noteLabel" text="{i18n>reportNoteLabel}" labelFor="noteInput" wrapping="true" class="residentQuestion" />
+                <TextArea
+                    id="noteInput"
+                    value="{view>/note}"
+                    valueLiveUpdate="true"
+                    maxLength="500"
+                    showExceededText="true"
+                    rows="3"
+                    growing="true"
+                    growingMaxLines="8"
+                    width="100%"
+                    placeholder="{i18n>reportNotePlaceholder}"
+                    valueState="{= ${view>/noteTooLong} ? 'Error' : 'None' }"
+                    valueStateText="{i18n>reportNoteTooLong}"
+                    liveChange=".onNoteChange" />
+
+                <Button
+                    id="sendButton"
+                    text="{i18n>reportSend}"
+                    type="Emphasized"
+                    width="100%"
+                    enabled="{= !!${view>/areaId} &amp;&amp; !!${view>/problem} &amp;&amp; !${view>/noteTooLong} &amp;&amp; !${view>/busy} }"
+                    press=".onSend"
+                    class="residentSend" />
+                <Text
+                    id="chooseFirstHint"
+                    text="{i18n>reportChooseFirst}"
+                    visible="{= !${view>/areaId} || !${view>/problem} }"
+                    class="residentHint" />
+            </VBox>
+        </f:content>
+    </f:DynamicPage>
+</mvc:View>

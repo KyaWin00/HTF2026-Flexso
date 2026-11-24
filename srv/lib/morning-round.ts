@@ -29,6 +29,8 @@ export interface PipeFacts {
   readonly nominalFlowRate: number; // L/min
   readonly currentFlowRate: number; // L/min
   readonly currentPressure: number; // PSI
+  /** Open (not handled) reports from villagers at a place this pipe feeds: problem codes. */
+  readonly reports?: readonly string[];
 }
 
 /** The facts about one landmark that the rules need. */
@@ -61,6 +63,12 @@ export interface PipePlan {
   readonly households: number | null;
   /** Nobody gets water through this pipe. */
   readonly nobodyDependsOnIt: boolean;
+  /** The level from the measurements alone (level may be higher because of a report). */
+  readonly measuredLevel: PipeLevel;
+  /** The most serious open report from villagers (noWater, littleWater, leak, other), or null. */
+  readonly reportedProblem: string | null;
+  /** The level was raised by a villager's report, not by the measurements. */
+  readonly raisedByReport: boolean;
   /** The rule that put this visit before the next one; null when the pipe needs no visit. */
   readonly whyBeforeNext: WhyCode | null;
   /** pipeIDs that run dry when this pipe fails (itself and everything downstream). */
@@ -87,6 +95,25 @@ const SOURCE_KIND = 'spring';
 /** Flow as a percentage of normal; a pipe without a normal flow counts as 100 %. */
 function flowPercentOf(pipe: PipeFacts): number {
   return pipe.nominalFlowRate > 0 ? (pipe.currentFlowRate / pipe.nominalFlowRate) * 100 : 100;
+}
+
+/**
+ * Villagers' reports, read in Maren's own levels (the team owner decided the app weighs reports):
+ * "geen water" is certainly less than half of normal → alarm; "weinig water" is less than normal but
+ * not nothing → aandacht nodig. A leak or "iets anders" has no level of its own: shown, not ranked.
+ */
+const REPORT_LEVEL: Readonly<Record<string, PipeLevel>> = { noWater: 'alarm', littleWater: 'attention' };
+/** Most serious first, for showing one report per pipe. */
+const REPORT_ORDER = ['noWater', 'littleWater', 'leak', 'other'];
+
+function reportLevelOf(pipe: PipeFacts): PipeLevel {
+  const levels = (pipe.reports ?? []).map((code) => REPORT_LEVEL[code] ?? 'ok');
+  return levels.reduce<PipeLevel>((worst, level) => (LEVEL_RANK[level] < LEVEL_RANK[worst] ? level : worst), 'ok');
+}
+
+function worstReport(pipe: PipeFacts): string | null {
+  const reports = pipe.reports ?? [];
+  return REPORT_ORDER.find((code) => reports.includes(code)) ?? (reports[0] ?? null);
 }
 
 /** Maren's two limits, strictly "below". */
@@ -204,7 +231,7 @@ export function planMorningRound(
       .sort((x, y) => (x.waterPriority ?? UNRANKED) - (y.waterPriority ?? UNRANKED));
     return {
       pipe,
-      level: levelOf(pipe),
+      level: LEVEL_RANK[reportLevelOf(pipe)] < LEVEL_RANK[levelOf(pipe)] ? reportLevelOf(pipe) : levelOf(pipe),
       bestPriority: areas[0]?.waterPriority ?? UNRANKED,
       depth: depths.get(pipe.pipeID) ?? UNRANKED,
       areas,
@@ -236,6 +263,9 @@ export function planMorningRound(
       servedAreas: c.areas.map((a) => a.name),
       households: complete ? c.areas.reduce((sum, a) => sum + (a.households ?? 0), 0) : null,
       nobodyDependsOnIt: c.areas.length === 0,
+      measuredLevel: levelOf(c.pipe),
+      reportedProblem: worstReport(c.pipe),
+      raisedByReport: c.level !== levelOf(c.pipe),
       whyBeforeNext: why.get(c.pipe.ID) ?? null,
       downstreamPipes: [...c.downstream],
     });

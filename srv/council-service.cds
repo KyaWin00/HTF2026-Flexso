@@ -66,4 +66,34 @@ service CouncilService @(path: 'council', impl: 'srv/council-service') {
 
   /** Rowan: the council has 500 kronen to spend every week. */
   function weekBudget() returns Integer;
+
+  /** Why a proposal line costs money (see srv/lib/council-proposal.ts). */
+  type ProposalNeed : String enum { noWaterNow; orderTooLate; waterRisk; }
+
+  /** What the proposal does with a line (see srv/lib/council-proposal.ts). */
+  type ProposalStatus : String enum { proposed; overBudget; checkFirst; noRule; orderInTime; nobodyAffected; }
+
+  /**
+   * Rowan: "als u onze 500 kronen had, gaat het hierheen, en waarom."
+   * Computed on every read by srv/council-service.ts — not stored, so no table (persistence.skip).
+   * Already sorted: proposed lines first (position 1, 2, …), then the ones left out and why.
+   */
+  @cds.persistence.skip
+  @readonly
+  entity ProposalLines {
+    key ID           : String;     // "water-<pipeID>" or "food-<itemID>"
+        position     : Integer;    // 1, 2, … in the proposal; null = not proposed
+        sortOrder    : Integer;
+        kind         : String;     // water | food
+        ref          : String;     // pipeID or itemID
+        title        : String;
+        areas        : String;     // parts of the village behind a pipe; empty for food (whole village)
+        households   : Integer;
+        need         : ProposalNeed;
+        status       : ProposalStatus;
+        cost         : Integer;    // kronen from the council budget
+        cumulative   : Integer;    // proposal total up to this line
+        remaining    : Integer;    // budget left after this line
+        doubtReasons : String;     // Ilse's signs, comma-separated
+  }
 }

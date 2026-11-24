@@ -32,6 +32,14 @@
           "subTitle": "{{appDescription}}",
           "icon": "sap-icon://ti/droplet",
           "signature": { "parameters": {}, "additionalParameters": "allowed" }
+        },
+        "report": {
+          "semanticObject": "WaterReport",
+          "action": "create",
+          "title": "{{reportTileTitle}}",
+          "subTitle": "{{reportTileSubtitle}}",
+          "icon": "sap-icon://ti/droplet-exclamation",
+          "signature": { "parameters": {}, "additionalParameters": "allowed" }
         }
       }
     }
@@ -43,11 +51,6 @@
     "fullWidth": true
   },
   "sap.ui5": {
-    "rootView": {
-      "viewName": "oakhaven.maren.view.Main",
-      "type": "XML",
-      "id": "main"
-    },
     "dependencies": {
       "minUI5Version": "1.136.0",
       "libs": { "sap.ui.core": {}, "sap.m": {}, "sap.f": {} }
@@ -73,6 +76,6 @@
         "settings": { "operationMode": "Server", "autoExpandSelect": true, "earlyRequests": true }
       }
     },
-    "resources": { "css": [{ "uri": "css/style.css" }] }
+    "resources": { "css": [{ "uri": "css/style.css" }, { "uri": "css/resident.css" }] }
   }
 }

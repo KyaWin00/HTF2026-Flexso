@@ -1,70 +1,7 @@
-/* Ochtendronde: big and simple for the phone, details on the laptop.
-   Look: Hack The Future 2026 ("The Curse of Achrona"), on top of sap_horizon_dark.
-   The brand block below is the ONLY place with hard-coded colours; everything else uses
-   variables. Status colours stay SAP semantic (Error/Warning/Success/Information) with text + icon.
-   Spacing on a 0.5rem grid. */
-
-/* ---------- Hack The Future 2026 brand (tokens from the :root of 2026.hackthefuture.be) ----------
-   Set on the app's own root (the DynamicPage), so the launchpad and the other apps keep Horizon.
-   Not used on purpose: the blue "hackers" and orange "creatives" gradients. In this app blue means
-   "valt droog" and orange means "aandacht nodig"; a brand colour must never look like a status. */
-.marenPage {
-    --htf-dark-grey: #160f1f;
-    --htf-purple: #a52bd9;
-    --htf-pink: #e292f4;
-    --htf-light-blue: #e1e7ff;
-    --htf-middle-grey: #7b7a8f;
-
-    /* Derived from the tokens above (no new colours). Contrast on --htf-surface:
-       light blue 14:1, muted 7.7:1, pink 8:1 (all WCAG AA for normal text). */
-    --htf-surface: color-mix(in srgb, var(--htf-purple) 10%, var(--htf-dark-grey));
-    --htf-edge: color-mix(in srgb, var(--htf-purple) 55%, var(--htf-dark-grey));
-    --htf-line: color-mix(in srgb, var(--htf-purple) 30%, var(--htf-dark-grey));
-    --htf-hover: color-mix(in srgb, var(--htf-purple) 18%, var(--htf-dark-grey));
-    --htf-muted: color-mix(in srgb, var(--htf-light-blue) 45%, var(--htf-middle-grey));
-    /* The one brand gradient in this app: a thin top edge on the stop cards. */
-    --htf-accent-gradient: linear-gradient(90deg, var(--htf-purple), var(--htf-pink));
-
-    /* The page itself: the DynamicPage has backgroundDesign="Transparent" in the view, so this
-       background on its own root shows through (no styling of the control's inner DOM). */
-    background: var(--htf-dark-grey);
-
-    /* SAP theme parameters follow the brand inside this app, so the controls do too. */
-    --sapBrandColor: var(--htf-purple);
-    --sapBackgroundColor: var(--htf-dark-grey);
-    --sapObjectHeader_Background: var(--htf-dark-grey);
-    --sapTextColor: var(--htf-light-blue);
-    --sapGroup_TitleTextColor: var(--htf-light-blue);
-    --sapList_TextColor: var(--htf-light-blue);
-    --sapList_HeaderTextColor: var(--htf-light-blue);
-    --sapContent_IconColor: var(--htf-light-blue);
-    --sapContent_LabelColor: var(--htf-muted);
-    --sapTile_Background: var(--htf-surface);
-    --sapTile_BorderColor: var(--htf-edge);
-    --sapGroup_TitleBackground: var(--htf-surface);
-    --sapGroup_ContentBackground: var(--htf-surface);
-    --sapList_Background: var(--htf-surface);
-    --sapList_HeaderBackground: var(--htf-surface);
-    --sapList_BorderColor: var(--htf-line);
-    --sapList_Hover_Background: var(--htf-hover);
-}
-
-/* Headings in the event's voice: bold, uppercase, tight. Etna and P22 Morris are licensed fonts
-   and not loaded; Horizon's own 72 Black carries the feel. Pink is a brand colour, not a status. */
-.marenPage .marenHeading,
-.marenPage .marenSection {
-    font-family: var(--sapFontBlackFamily);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-}
-
-.marenPage .marenSection {
-    color: var(--htf-pink);
-}
-
-.marenLogo {
-    color: var(--htf-pink);
-}
+/* Ochtendronde: the SAP Horizon theme as it is, plus one idea: the pipe network drawn like a
+   transit map ("leidingplan"), because Maren thinks in lines — "op dezelfde lijn",
+   "stroomopwaarts". The numbered dots of today's stops are the same on the list and on the plan.
+   Only theme parameters, no brand colours. */
 
 /* Standalone index.html: let the page fill the window (the launchpad already does this). */
 html,
@@ -73,138 +10,292 @@ body {
 }
 
 .marenContent {
-    max-width: 75rem;
+    width: 100%;
 }
 
-/* ---------- Today's stops ---------- */
-
-/* Phone: the two cards stacked. Wide: side by side, same height (each card grows from 18rem). */
-.marenStops {
-    gap: 0.75rem;
+/* Two columns from tablet width up: today (wider) and the pipe plan; one column on the phone. */
+.marenColumns {
+    display: block;
 }
 
-/* A flat tile with the theme's own radius and a purple edge; no shadow, no side stripes.
-   The thin purple-to-pink top edge is the app's one brand gradient. */
-.marenStop {
-    box-sizing: border-box;
-    padding: 1.25rem 1rem 1rem;
-    gap: 0.5rem;
-    background: var(--htf-accent-gradient) top / 100% 0.25rem no-repeat, var(--sapTile_Background);
-    border: 1px solid var(--sapTile_BorderColor);
-    border-radius: var(--sapTile_BorderCornerRadius);
+@media (min-width: 900px) {
+    .marenColumns {
+        display: grid;
+        grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+        gap: 3rem;
+        align-items: start;
+    }
 }
 
-/* "1. EERST" / "2. DAARNA": the event's heading style, in pink. */
-.marenStopNumber {
-    font-family: var(--sapFontBlackFamily);
-    font-size: 1.5rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--htf-pink);
-}
-
-/* The place is the one thing to see first: the largest text on the card. */
-.marenPage .marenPlace {
-    font-size: var(--sapFontHeader2Size);
+/* The focal point of the page: one plain sentence, what do we do today. */
+.marenSummary {
+    display: block;
+    margin: 0.75rem 0 1rem;
     font-family: var(--sapFontBoldFamily);
-    line-height: 1.2;
-    color: var(--sapTextColor);
+    font-size: 1.75rem;
+    line-height: 1.25;
+    color: var(--sapTitleColor);
 }
 
-.marenWhyLabel {
-    margin-bottom: -0.25rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
+@media (max-width: 599px) {
+    .marenSummary {
+        font-size: 1.25rem;
+        margin: 0.5rem 0 0.75rem;
+    }
 }
 
-/* The "why" is what Maren asked for by name: full text colour, no italics. */
-.marenWhy {
-    font-size: 1.25rem;
-    line-height: 1.4;
-    color: var(--sapTextColor);
+/* Water bar: the percentage sits inside the bar. Colour follows the level, which is also shown
+   as text + icon next to the place, so colour is never the only signal. */
+.marenBar {
+    position: relative;
+    height: 2rem;
+    margin: 0.375rem 0;
+    border-radius: 1rem;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--sapContent_LabelColor) 22%, transparent);
 }
 
-.marenFacts {
-    font-size: 1.125rem;
-    line-height: 1.4;
+.marenBarFill {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    border-radius: 1rem;
+}
+
+.marenBar--alarm .marenBarFill {
+    background: color-mix(in srgb, var(--sapNegativeColor) 70%, transparent);
+}
+
+.marenBar--attention .marenBarFill {
+    background: color-mix(in srgb, var(--sapCriticalColor) 60%, transparent);
+}
+
+.marenBarText {
+    position: relative;
+    display: block;
+    padding: 0 0.875rem;
+    line-height: 2rem;
+    font-family: var(--sapFontBoldFamily);
     color: var(--sapTextColor);
+    text-shadow: 0 1px 2px var(--sapBackgroundColor);
+    white-space: nowrap;
+}
+
+.marenSection {
+    margin: 1.5rem 0 0.5rem;
 }
 
 .marenMeta {
-    font-size: var(--sapFontSize);
     color: var(--sapContent_LabelColor);
 }
 
 .marenStrong {
-    font-weight: bold;
+    font-family: var(--sapFontBoldFamily);
 }
 
-.marenLater {
+/* ---------- Today: one row per stop ---------- */
+
+.marenRow {
+    display: flex;
+    gap: 1rem;
+    padding: 1.125rem 0;
+    border-bottom: 1px solid var(--sapList_BorderColor);
+}
+
+.marenStops {
+    border-top: 1px solid var(--sapList_BorderColor);
+}
+
+/* The numbered dot — exactly the dot on the pipe plan. */
+.marenDot {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border: 3px solid var(--sapTextColor);
+    border-radius: 50%;
+    font-family: var(--sapFontBoldFamily);
+    font-size: 1.25rem;
+}
+
+.marenSlot {
+    display: block;
     margin-top: 0.25rem;
+    font-size: var(--sapFontSmallSize);
+    color: var(--sapContent_LabelColor);
+    text-align: center;
 }
 
-.marenLaterTitle {
-    margin-top: 1.5rem;
+.marenStopBody {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.marenFacts {
+    font-size: 1rem;
+    line-height: 1.4;
+}
+
+/* The "why": readable, one step quieter than the facts, set apart by a little space. */
+.marenWhy {
+    margin-top: 0.25rem;
+    font-size: 0.9375rem;
+    line-height: 1.4;
+    color: var(--sapContent_LabelColor);
+}
+
+.marenFacts {
+    font-family: var(--sapFontBoldFamily);
+}
+
+/* The read-aloud button: Horizon's own button, scaled up as a whole (no styling of its inner DOM)
+   to about 60px high — easy to hit with thick work gloves, but not the full width. */
+.marenReadBox {
+    display: block;
+    margin: 0 0 1.75rem;
+}
+
+.marenReadBox > .sapMBtn {
+    transform: scale(1.4);
+    transform-origin: left top;
+}
+
+/* ---------- Tomorrow and later, reports ---------- */
+
+.marenLaterRow,
+.marenReportRow {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--sapList_BorderColor);
+}
+
+.marenLaterSlot {
+    flex: 0 0 7rem;
+    color: var(--sapContent_LabelColor);
+}
+
+.marenLaterBody,
+.marenReportBody {
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 .marenRefreshed {
     display: block;
-    margin: 0.5rem 0 0 1rem;
-}
-
-/* ---------- Details (laptop) ---------- */
-
-.marenDetails {
-    margin-top: 2rem;
-}
-
-.marenLegend {
-    margin: 0.5rem 0;
+    margin-top: 0.75rem;
 }
 
 .marenRule {
     display: block;
-    padding: 0.25rem 0;
+    padding: 0.125rem 0;
 }
 
-/* Phone: both stops, including the second "why", must fit on one screen (375 × 812) without
-   scrolling. Nothing Maren has to read goes below 16px. */
+.marenLegend {
+    gap: 1rem;
+    margin: 0.25rem 0 0.5rem;
+}
+
 @media (max-width: 599px) {
-    .marenStop {
-        gap: 0.375rem;
-    }
-
-    .marenPage .marenPlace {
-        font-size: 1.75rem;
-    }
-
-    .marenWhy {
-        font-size: 1.125rem;
-        line-height: 1.35;
-    }
-
-    .marenFacts {
-        font-size: 1rem;
-        line-height: 1.35;
+    .marenLaterSlot {
+        flex-basis: 5.5rem;
     }
 }
 
-/* On a wide screen the place name is read at arm's length: one step smaller. */
-@media (min-width: 600px) {
-    .marenPage .marenPlace {
-        font-size: var(--sapFontHeader3Size);
-    }
+/* ---------- The pipe plan (own SVG inside core:HTML) ---------- */
+
+.marenPlan svg {
+    display: block;
+    width: 100%;
+    max-width: 30rem;
+    height: auto;
 }
 
-/* ---------- Map (our own SVG inside core:HTML) ---------- */
+.planLine {
+    fill: none;
+    stroke-width: 8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    cursor: pointer;
+}
+
+/* Level = colour AND dash pattern, never colour alone (same as the map). */
+.planLine--alarm {
+    stroke: var(--sapNegativeColor);
+    stroke-dasharray: 18 10;
+}
+
+.planLine--attention {
+    stroke: var(--sapCriticalColor);
+    stroke-dasharray: 6 8;
+}
+
+.planLine--ok {
+    stroke: var(--sapPositiveColor);
+}
+
+.planDry {
+    fill: none;
+    stroke: var(--sapInformationColor);
+    stroke-width: 22;
+    stroke-opacity: 0.3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.planStation {
+    fill: var(--sapBackgroundColor);
+    stroke: var(--sapTextColor);
+    stroke-width: 3;
+}
+
+.planLabel {
+    fill: var(--sapTextColor);
+    font-family: var(--sapFontFamily);
+    font-size: 13px;
+}
+
+.planLabel--muted {
+    fill: var(--sapContent_LabelColor);
+}
+
+.planDryText {
+    fill: var(--sapInformationColor);
+    font-family: var(--sapFontBoldFamily);
+    font-size: 12px;
+}
+
+.planBadge {
+    cursor: pointer;
+}
+
+.planBadge circle {
+    fill: var(--sapBackgroundColor);
+    stroke: var(--sapTextColor);
+    stroke-width: 3;
+}
+
+.planBadge text {
+    fill: var(--sapTextColor);
+    font-family: var(--sapFontBoldFamily);
+    font-size: 15px;
+}
+
+/* ---------- Painted village map (laptop) ---------- */
 
 .marenMap svg {
     display: block;
     width: 100%;
-    max-width: 60rem;
     height: auto;
     box-sizing: border-box;
-    border: 1px solid var(--htf-edge);
+    border: 1px solid var(--sapList_BorderColor);
     border-radius: var(--sapElement_BorderCornerRadius);
 }
 
@@ -216,7 +307,6 @@ body {
     cursor: pointer;
 }
 
-/* Level = colour AND dash pattern, never colour alone. */
 .marenPipe--alarm {
     stroke: var(--sapNegativeColor);
     stroke-dasharray: 70 35;
@@ -231,7 +321,6 @@ body {
     stroke: var(--sapPositiveColor);
 }
 
-/* Dry shadow: everything that runs dry when the selected pipe fails. */
 .marenDry {
     fill: none;
     stroke: var(--sapInformationColor);
@@ -239,6 +328,15 @@ body {
     stroke-opacity: 0.45;
     stroke-linecap: round;
     stroke-linejoin: round;
+}
+
+.marenDryLabel {
+    fill: var(--sapTextColor);
+    font-size: 44px;
+    font-weight: bold;
+    paint-order: stroke;
+    stroke: var(--sapBackgroundColor);
+    stroke-width: 10;
 }
 
 .marenBadge {
